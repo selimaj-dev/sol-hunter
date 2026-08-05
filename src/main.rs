@@ -1,5 +1,5 @@
 pub mod executor;
-pub mod launch;
+pub mod types;
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
@@ -17,7 +17,7 @@ async fn main() -> anyhow::Result<()> {
     while let Some(msg) = ws.next().await {
         let msg = msg?;
         if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
-            let token: launch::PumpDevEvent = serde_json::from_str(&text)?;
+            let token: types::PumpDevEvent = serde_json::from_str(&text)?;
             println!("{:?}", token);
         }
     }

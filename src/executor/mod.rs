@@ -1,3 +1,5 @@
+pub mod pump_fun;
+
 use solana_sdk::pubkey::Pubkey;
 
 #[allow(async_fn_in_trait)]

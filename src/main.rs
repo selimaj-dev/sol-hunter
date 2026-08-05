@@ -17,7 +17,7 @@ async fn main() -> anyhow::Result<()> {
     while let Some(msg) = ws.next().await {
         let msg = msg?;
         if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
-            let token: serde_json::Value = serde_json::from_str(&text)?;
+            let token: launch::PumpDevEvent = serde_json::from_str(&text)?;
             println!("{:?}", token);
         }
     }

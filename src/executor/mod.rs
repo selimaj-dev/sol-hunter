@@ -1,7 +1,6 @@
 pub mod pump_fun;
 
 use rust_decimal::Decimal;
-use tokio::sync::Mutex;
 
 use crate::account::Account;
 
@@ -32,9 +31,7 @@ pub trait Executor {
 impl Account {
     pub fn executor(self) -> impl Executor {
         match self {
-            Self::PumpDev(account) => pump_fun::PumpDev {
-                account: Mutex::new(account),
-            },
+            Self::PumpDev(account) => pump_fun::PumpDev::new(account),
         }
     }
 }

@@ -19,12 +19,42 @@ pub enum Account {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountManger {
+pub struct AccountManager {
     pub active: String,
     pub accounts: HashMap<String, Account>,
 }
 
-impl AccountManger {
+impl Account {
+    pub async fn new() -> anyhow::Result<Self> {
+        let response = reqwest::Client::new()
+            .post("https://pumpdev.io/api/wallet/create")
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .context("Failed to create PumpDev wallet")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: serde_json::Value = response.json().await.unwrap_or_default();
+            let message = body
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("Unknown error");
+            return Err(anyhow!(
+                "Failed to create PumpDev wallet ({status}): {message}"
+            ));
+        }
+
+        let account: PumpDevAccount = response
+            .json()
+            .await
+            .context("Failed to parse PumpDev wallet")?;
+
+        Ok(Self::PumpDev(account))
+    }
+}
+
+impl AccountManager {
     pub async fn get() -> anyhow::Result<Self> {
         let path = get_accounts_path()?;
 
@@ -43,7 +73,13 @@ impl AccountManger {
     }
 
     pub async fn new() -> anyhow::Result<Self> {
-        Err(anyhow!("Not implemented yet"))
+        let mut accounts = HashMap::new();
+        accounts.insert("default".to_string(), Account::new().await?);
+
+        Ok(Self {
+            active: "default".to_string(),
+            accounts,
+        })
     }
 
     pub fn from_str(s: &str) -> anyhow::Result<Self> {

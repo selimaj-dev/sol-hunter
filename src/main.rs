@@ -7,6 +7,10 @@ use tokio_tungstenite::connect_async;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let mut builder = env_logger::Builder::from_default_env();
+    builder.filter_level(log::LevelFilter::Info);
+    builder.init();
+
     let (mut ws, _) = connect_async("wss://pumpdev.io/ws").await?;
 
     ws.send(tokio_tungstenite::tungstenite::Message::Text(

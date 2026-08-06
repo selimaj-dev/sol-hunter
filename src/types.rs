@@ -70,3 +70,51 @@ pub struct NewToken {
     #[serde(rename = "solAmount")]
     pub sol_amount: f64,
 }
+
+pub enum Mode {
+    Observing,
+    WaitingForEntry,
+    WaitingForExit,
+}
+
+pub struct Token {
+    pub mode: Mode,
+    pub execute_next: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum TradeType {
+    #[serde(rename = "buy")]
+    Buy,
+    #[serde(rename = "sell")]
+    Sell,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Trade {
+    pub signature: String,
+    pub mint: String,
+    pub trader: String,
+
+    #[serde(rename = "txType")]
+    pub tx_type: TradeType,
+
+    /// Value in lamports
+    #[serde(rename = "solAmount")]
+    pub sol_amount: f64,
+
+    /// Value in raw token units
+    #[serde(rename = "tokenAmount")]
+    pub token_amount: f64,
+
+    #[serde(rename = "marketCapSol")]
+    pub market_cap_sol: f64,
+
+    #[serde(rename = "vTokensInBondingCurve")]
+    pub v_tokens_in_bonding_curve: f64,
+
+    #[serde(rename = "vSolInBondingCurve")]
+    pub v_sol_in_bonding_curve: f64,
+
+    pub pool: String,
+}

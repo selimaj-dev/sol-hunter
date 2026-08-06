@@ -21,3 +21,4 @@ log = "0.4.33"
 env_logger = "0.11.11"
 rust_decimal = "1.42.1"
 reqwest = { version = "0.13.4", features = ["json"] }
+async-trait = "0.1.91"

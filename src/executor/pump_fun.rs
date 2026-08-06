@@ -84,6 +84,7 @@ impl PumpDev {
     }
 }
 
+#[async_trait::async_trait]
 impl Executor for PumpDev {
     async fn buy(
         &self,

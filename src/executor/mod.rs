@@ -4,8 +4,8 @@ use rust_decimal::Decimal;
 
 use crate::account::Account;
 
-
-#[allow(async_fn_in_trait, unused_variables)]
+#[allow(unused_variables)]
+#[async_trait::async_trait]
 pub trait Executor {
     async fn buy(
         &self,

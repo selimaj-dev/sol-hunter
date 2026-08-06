@@ -1,5 +1,8 @@
+use std::str::FromStr;
+
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Debug)]
 pub enum PumpDevEvent {
@@ -56,9 +59,12 @@ impl<'de> Deserialize<'de> for PumpDevEvent {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct NewToken {
-    pub mint: String,
+    pub mint: PublicKeyParseable,
+    #[serde(rename = "traderPublicKey")]
+    pub trader_public_key: PublicKeyParseable,
+
     pub name: String,
     pub symbol: String,
     pub uri: String,
@@ -66,6 +72,34 @@ pub struct NewToken {
     pub market_cap_sol: f64,
     #[serde(rename = "solAmount")]
     pub sol_amount: f64,
-    #[serde(rename = "traderPublicKey")]
-    pub trader_public_key: String,
+}
+
+impl std::ops::Deref for PublicKeyParseable {
+    type Target = Pubkey;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for PublicKeyParseable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PublicKeyParseable(pub Pubkey);
+
+impl<'de> Deserialize<'de> for PublicKeyParseable {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+
+        Pubkey::from_str(&value)
+            .map(PublicKeyParseable)
+            .map_err(serde::de::Error::custom)
+    }
 }

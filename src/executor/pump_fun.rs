@@ -40,7 +40,7 @@ impl PumpDev {
         &self,
         action: &str,
         mint: String,
-        amount: Decimal,
+        amount: String,
         priority: Decimal,
         slippage: u16,
         denominated_in_sol: bool,
@@ -92,8 +92,15 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        self.trade("buy", mint, amount, priority, slippage, true)
-            .await
+        self.trade(
+            "buy",
+            mint,
+            amount.round_dp(3).to_string(),
+            priority,
+            slippage,
+            true,
+        )
+        .await
     }
 
     async fn sell(
@@ -103,7 +110,32 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        self.trade("sell", mint, amount, priority, slippage, false)
-            .await
+        self.trade(
+            "sell",
+            mint,
+            amount.round_dp(3).to_string(),
+            priority,
+            slippage,
+            false,
+        )
+        .await
+    }
+
+    async fn sell_percent(
+        &self,
+        mint: String,
+        amount: u8,
+        priority: Decimal,
+        slippage: u16,
+    ) -> anyhow::Result<()> {
+        self.trade(
+            "sell",
+            mint,
+            format!("{amount}%"),
+            priority,
+            slippage,
+            false,
+        )
+        .await
     }
 }

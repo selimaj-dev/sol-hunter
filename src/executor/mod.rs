@@ -26,6 +26,16 @@ pub trait Executor {
     ) -> anyhow::Result<()> {
         Ok(())
     }
+
+    async fn sell_percent(
+        &self,
+        mint: String,
+        amount: u8,
+        priority: Decimal,
+        slippage: u16,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl Account {

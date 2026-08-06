@@ -7,6 +7,7 @@ pub enum PumpDevEvent {
     ConnectionStatus { connected: bool, timestamp: u64 },
     Subscribed { method: String },
     Create(NewToken),
+    Trade(Trade),
 }
 
 impl<'de> Deserialize<'de> for PumpDevEvent {

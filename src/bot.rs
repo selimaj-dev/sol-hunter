@@ -134,6 +134,10 @@ impl Bot {
                         self.on_new_coin(token).await?;
                     }
 
+                    Ok(crate::types::PumpDevEvent::Trade(trade)) => {
+                        self.on_trade(trade).await?;
+                    }
+
                     Ok(event) => {
                         println!("{:?}", event);
                     }

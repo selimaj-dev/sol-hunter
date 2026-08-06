@@ -9,7 +9,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use crate::{
     account::AccountManager,
     executor::Executor,
-    strategy::{Strategy, strat::Strat},
+    strategy::{Strategy, burst::Burst},
 };
 
 pub struct Bot {
@@ -69,7 +69,7 @@ impl Bot {
             ws: Mutex::new(connect_async("wss://pumpdev.io/ws").await?.0),
             executor: Mutex::new(Box::new(account.executor())),
             accounts: Mutex::new(accounts),
-            strategy: Mutex::new(Box::new(Strat {
+            strategy: Mutex::new(Box::new(Burst {
                 tokens: HashMap::new(),
             })),
         }))

@@ -73,17 +73,6 @@ pub struct NewToken {
     pub sol_amount: f64,
 }
 
-pub enum Mode {
-    Observing,
-    WaitingForEntry,
-    WaitingForExit,
-}
-
-pub struct Token {
-    pub mode: Mode,
-    pub execute_next: bool,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 pub enum TradeType {
     #[serde(rename = "buy")]

@@ -1,4 +1,4 @@
-pub mod strat;
+pub mod burst;
 
 use std::sync::Arc;
 

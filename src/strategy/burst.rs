@@ -3,15 +3,26 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     bot::Bot,
     strategy::Strategy,
-    types::{Mode, NewToken, Token, Trade},
+    types::{NewToken, Trade},
 };
 
-pub struct Strat {
+pub enum Mode {
+    Observing,
+    WaitingForEntry,
+    WaitingForExit,
+}
+
+pub struct Token {
+    pub mode: Mode,
+    pub execute_next: bool,
+}
+
+pub struct Burst {
     pub tokens: HashMap<String, Token>,
 }
 
 #[async_trait::async_trait]
-impl Strategy for Strat {
+impl Strategy for Burst {
     async fn on_new_coin(&mut self, bot: Arc<Bot>, token: NewToken) -> anyhow::Result<()> {
         self.tokens.insert(
             token.mint.clone(),

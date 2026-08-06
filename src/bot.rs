@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::Mutex};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 use crate::{
@@ -13,15 +13,15 @@ use crate::{
 };
 
 pub struct Bot {
-    pub ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
-    pub accounts: AccountManager,
-    pub executor: Box<dyn Executor>,
-    pub tokens: HashMap<String, Token>,
+    pub ws: Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    pub accounts: Mutex<AccountManager>,
+    pub executor: Mutex<Box<dyn Executor>>,
+    pub tokens: Mutex<HashMap<String, Token>>,
 }
 
 impl Bot {
-    pub async fn on_new_coin(&mut self, token: NewToken) -> anyhow::Result<()> {
-        self.tokens.insert(
+    pub async fn on_new_coin(&self, token: NewToken) -> anyhow::Result<()> {
+        self.tokens.lock().await.insert(
             token.mint.clone(),
             Token {
                 mode: Mode::Observing,
@@ -34,8 +34,12 @@ impl Bot {
         Ok(())
     }
 
-    pub async fn on_trade(&mut self, trade: Trade) -> anyhow::Result<()> {
-        let Some(token) = self.tokens.get_mut(&trade.mint) else {
+    pub async fn on_trade(&self, trade: Trade) -> anyhow::Result<()> {
+        log::info!("Trade: {trade:?}");
+
+        let mut tokens = self.tokens.lock().await;
+
+        let Some(token) = tokens.get_mut(&trade.mint) else {
             log::error!("Token not found on trade: {:?}", trade.mint);
             return Ok(());
         };
@@ -51,8 +55,10 @@ impl Bot {
         Ok(())
     }
 
-    pub async fn subscribe(&mut self, mint: &str) -> anyhow::Result<()> {
+    pub async fn subscribe(&self, mint: &str) -> anyhow::Result<()> {
         self.ws
+            .lock()
+            .await
             .send(tokio_tungstenite::tungstenite::Message::Text(
                 json!({
                     "method": "subscribeTokenTrade",
@@ -66,8 +72,10 @@ impl Bot {
         Ok(())
     }
 
-    pub async fn unsubscribe(&mut self, mint: &str) -> anyhow::Result<()> {
+    pub async fn unsubscribe(&self, mint: &str) -> anyhow::Result<()> {
         self.ws
+            .lock()
+            .await
             .send(tokio_tungstenite::tungstenite::Message::Text(
                 json!({
                     "method": "unsubscribeTokenTrade",
@@ -93,28 +101,31 @@ impl Bot {
             .clone();
 
         Ok(Self {
-            ws: connect_async("wss://pumpdev.io/ws").await?.0,
-            executor: Box::new(account.executor()),
-            accounts,
-            tokens: HashMap::new(),
+            ws: Mutex::new(connect_async("wss://pumpdev.io/ws").await?.0),
+            executor: Mutex::new(Box::new(account.executor())),
+            accounts: Mutex::new(accounts),
+            tokens: Mutex::new(HashMap::new()),
         })
     }
 
-    pub async fn refresh_account(&mut self) -> anyhow::Result<()> {
-        let account = self
+    pub async fn refresh_account(&self) -> anyhow::Result<()> {
+        let accounts = self.accounts.lock().await;
+
+        let account = accounts
             .accounts
-            .accounts
-            .get(&self.accounts.active)
+            .get(&accounts.active)
             .context("Failed to get account")?
             .clone();
 
-        self.executor = Box::new(account.executor());
+        *self.executor.lock().await = Box::new(account.executor());
 
         Ok(())
     }
 
-    pub async fn initialize_websocket_subscribe(&mut self) -> anyhow::Result<()> {
+    pub async fn initialize_websocket_subscribe(&self) -> anyhow::Result<()> {
         self.ws
+            .lock()
+            .await
             .send(tokio_tungstenite::tungstenite::Message::Text(
                 json!({ "method": "subscribeNewToken" }).to_string().into(),
             ))
@@ -123,19 +134,24 @@ impl Bot {
         Ok(())
     }
 
-    pub async fn start(&mut self) -> anyhow::Result<()> {
+    pub async fn start(&self) -> anyhow::Result<()> {
         self.initialize_websocket_subscribe().await?;
 
-        while let Some(msg) = self.ws.next().await {
-            let msg = msg?;
+        let mut ws = self.ws.lock().await;
+
+        while let Some(msg) = ws.next().await.transpose()? {
             if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
                 match serde_json::from_str::<crate::types::PumpDevEvent>(&text) {
                     Ok(crate::types::PumpDevEvent::Create(token)) => {
+                        drop(ws);
                         self.on_new_coin(token).await?;
+                        ws = self.ws.lock().await;
                     }
 
                     Ok(crate::types::PumpDevEvent::Trade(trade)) => {
+                        drop(ws);
                         self.on_trade(trade).await?;
+                        ws = self.ws.lock().await;
                     }
 
                     Ok(event) => {
@@ -143,7 +159,7 @@ impl Bot {
                     }
 
                     Err(err) => {
-                        log::error!("{err}");
+                        log::error!("{err}, MSG -> {text}");
                     }
                 }
             }

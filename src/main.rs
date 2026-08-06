@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     builder.filter_level(log::LevelFilter::Info);
     builder.init();
 
-    let mut bot = Bot::new().await?;
+    let bot = Bot::new().await?;
 
     bot.start().await
 }

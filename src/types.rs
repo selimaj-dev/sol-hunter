@@ -16,11 +16,14 @@ impl<'de> Deserialize<'de> for PumpDevEvent {
         D: Deserializer<'de>,
     {
         let value = Value::deserialize(deserializer)?;
+        if value.get("txType").is_some() && value.get("name").is_none() {
+            let trade: Trade = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            return Ok(PumpDevEvent::Trade(trade));
+        }
 
-        if value.get("txType").is_some() {
+        if value.get("name").is_some() {
             let token: NewToken =
                 serde_json::from_value(value).map_err(serde::de::Error::custom)?;
-
             return Ok(PumpDevEvent::Create(token));
         }
 
@@ -33,10 +36,8 @@ impl<'de> Deserialize<'de> for PumpDevEvent {
                 client_id: u64,
                 message: String,
             },
-
             #[serde(rename = "connectionStatus")]
             ConnectionStatus { connected: bool, timestamp: u64 },
-
             #[serde(rename = "subscribed")]
             Subscribed { method: String },
         }
@@ -95,16 +96,16 @@ pub enum TradeType {
 pub struct Trade {
     pub signature: String,
     pub mint: String,
+
+    #[serde(rename = "traderPublicKey")]
     pub trader: String,
 
     #[serde(rename = "txType")]
     pub tx_type: TradeType,
 
-    /// Value in lamports
     #[serde(rename = "solAmount")]
     pub sol_amount: f64,
 
-    /// Value in raw token units
     #[serde(rename = "tokenAmount")]
     pub token_amount: f64,
 
@@ -116,6 +117,4 @@ pub struct Trade {
 
     #[serde(rename = "vSolInBondingCurve")]
     pub v_sol_in_bonding_curve: f64,
-
-    pub pool: String,
 }

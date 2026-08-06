@@ -6,7 +6,7 @@ use crate::account::Account;
 
 #[allow(unused_variables)]
 #[async_trait::async_trait]
-pub trait Executor {
+pub trait Executor: Send + Sync {
     async fn buy(
         &self,
         mint: String,

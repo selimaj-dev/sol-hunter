@@ -1,6 +1,7 @@
 pub mod account;
 pub mod bot;
 pub mod executor;
+pub mod strategy;
 pub mod types;
 
 use crate::bot::Bot;

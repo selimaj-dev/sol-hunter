@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
@@ -9,52 +9,17 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use crate::{
     account::AccountManager,
     executor::Executor,
-    types::{Mode, NewToken, Token, Trade},
+    strategy::{Strategy, strat::Strat},
 };
 
 pub struct Bot {
     pub ws: Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     pub accounts: Mutex<AccountManager>,
     pub executor: Mutex<Box<dyn Executor>>,
-    pub tokens: Mutex<HashMap<String, Token>>,
+    pub strategy: Mutex<Box<dyn Strategy>>,
 }
 
 impl Bot {
-    pub async fn on_new_coin(&self, token: NewToken) -> anyhow::Result<()> {
-        self.tokens.lock().await.insert(
-            token.mint.clone(),
-            Token {
-                mode: Mode::Observing,
-                execute_next: false,
-            },
-        );
-
-        self.subscribe(&token.mint).await?;
-
-        Ok(())
-    }
-
-    pub async fn on_trade(&self, trade: Trade) -> anyhow::Result<()> {
-        log::info!("Trade: {trade:?}");
-
-        let mut tokens = self.tokens.lock().await;
-
-        let Some(token) = tokens.get_mut(&trade.mint) else {
-            log::error!("Token not found on trade: {:?}", trade.mint);
-            return Ok(());
-        };
-
-        match &token.mode {
-            Mode::Observing => {}
-
-            Mode::WaitingForEntry => {}
-
-            Mode::WaitingForExit => {}
-        }
-
-        Ok(())
-    }
-
     pub async fn subscribe(&self, mint: &str) -> anyhow::Result<()> {
         self.ws
             .lock()
@@ -91,7 +56,7 @@ impl Bot {
 }
 
 impl Bot {
-    pub async fn new() -> anyhow::Result<Self> {
+    pub async fn new() -> anyhow::Result<Arc<Self>> {
         let accounts = AccountManager::get().await?;
 
         let account = accounts
@@ -100,12 +65,14 @@ impl Bot {
             .context("Failed to get account")?
             .clone();
 
-        Ok(Self {
+        Ok(Arc::new(Self {
             ws: Mutex::new(connect_async("wss://pumpdev.io/ws").await?.0),
             executor: Mutex::new(Box::new(account.executor())),
             accounts: Mutex::new(accounts),
-            tokens: Mutex::new(HashMap::new()),
-        })
+            strategy: Mutex::new(Box::new(Strat {
+                tokens: HashMap::new(),
+            })),
+        }))
     }
 
     pub async fn refresh_account(&self) -> anyhow::Result<()> {
@@ -134,7 +101,7 @@ impl Bot {
         Ok(())
     }
 
-    pub async fn start(&self) -> anyhow::Result<()> {
+    pub async fn start(self: &Arc<Self>) -> anyhow::Result<()> {
         self.initialize_websocket_subscribe().await?;
 
         let mut ws = self.ws.lock().await;
@@ -144,13 +111,21 @@ impl Bot {
                 match serde_json::from_str::<crate::types::PumpDevEvent>(&text) {
                     Ok(crate::types::PumpDevEvent::Create(token)) => {
                         drop(ws);
-                        self.on_new_coin(token).await?;
+                        self.strategy
+                            .lock()
+                            .await
+                            .on_new_coin(self.clone(), token)
+                            .await?;
                         ws = self.ws.lock().await;
                     }
 
                     Ok(crate::types::PumpDevEvent::Trade(trade)) => {
                         drop(ws);
-                        self.on_trade(trade).await?;
+                        self.strategy
+                            .lock()
+                            .await
+                            .on_trade(self.clone(), trade)
+                            .await?;
                         ws = self.ws.lock().await;
                     }
 

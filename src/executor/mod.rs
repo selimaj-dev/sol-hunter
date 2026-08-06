@@ -1,15 +1,10 @@
 pub mod pump_fun;
 
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 
-use crate::executor::pump_fun::PumpDevAccount;
+use crate::account::Account;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum Account {
-    PumpDev(PumpDevAccount),
-}
 
 #[allow(async_fn_in_trait, unused_variables)]
 pub trait Executor {
@@ -31,5 +26,15 @@ pub trait Executor {
         slippage: u16,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+impl Account {
+    pub fn executor(self) -> impl Executor {
+        match self {
+            Self::PumpDev(account) => pump_fun::PumpDev {
+                account: Mutex::new(account),
+            },
+        }
     }
 }

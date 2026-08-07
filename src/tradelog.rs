@@ -14,7 +14,7 @@ pub struct TradeLog {
 
     pub opened_at: chrono::DateTime<chrono::Utc>,
     pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub duration: Option<chrono::TimeDelta>,
+    pub duration_secs: Option<i64>,
 
     pub entry_price_sol: f64,
     pub exit_price_sol: Option<f64>,
@@ -44,7 +44,7 @@ impl TradeLog {
             exit_price_sol: None,
 
             pnl_percent: None,
-            duration: None,
+            duration_secs: None,
 
             exit_reason: None,
 
@@ -63,7 +63,7 @@ impl TradeLog {
         self.pnl_percent = Some(pnl);
 
         self.closed_at = Some(now);
-        self.duration = Some(now.signed_duration_since(self.opened_at));
+        self.duration_secs = Some(now.signed_duration_since(self.opened_at).num_seconds());
 
         self.exit_reason = Some(reason);
     }

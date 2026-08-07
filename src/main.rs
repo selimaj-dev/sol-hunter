@@ -25,6 +25,7 @@ async fn try_shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow
         match line.to_lowercase().trim() {
             "exit" | "shutdown" => {
                 let _ = tx.send(true);
+                break Ok(());
             }
 
             "save" => {

@@ -19,3 +19,4 @@ reqwest = { version = "0.13.4", features = ["json"] }
 async-trait = "0.1.91"
 csv = "1.4.0"
 chrono = { version = "0.4.45", features = ["serde"] }
+helius = "1.1.0"

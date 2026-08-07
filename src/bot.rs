@@ -6,8 +6,11 @@ use helius::Helius;
 use tokio::sync::{Mutex, watch};
 
 use crate::{
-    data::account::{Account, AccountManager},
-    data::tradelog::TradeLog,
+    data::{
+        account::{Account, AccountManager},
+        tradelog::TradeLog,
+    },
+    launchpad::Executor,
     strategy::{Strategy, veloc::MomentumVelocityStrategy},
 };
 
@@ -17,7 +20,7 @@ pub struct Bot {
 
     pub strategy: Mutex<Box<dyn Strategy>>,
 
-    pub executor: Mutex<()>,
+    pub executor: Mutex<Executor>,
     pub trade_log: Mutex<Vec<TradeLog>>,
 
     pub helius: Helius,
@@ -41,7 +44,7 @@ impl Bot {
             strategy: Mutex::new(Box::new(MomentumVelocityStrategy::new())),
 
             trade_log: Mutex::new(Vec::new()),
-            executor: Mutex::new(()),
+            executor: Mutex::new(Executor::new()),
         }))
     }
 

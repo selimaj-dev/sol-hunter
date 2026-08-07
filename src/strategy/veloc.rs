@@ -173,7 +173,7 @@ impl Strategy for MomentumVelocityStrategy {
                 bot.executor
                     .lock()
                     .await
-                    .sell_percent(mint, 100, PRIORITY, SLIPPAGE)
+                    .sell(mint, 100, PRIORITY, SLIPPAGE)
                     .await?;
 
                 if let Some(mut pos) = self.positions.remove(mint) {

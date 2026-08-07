@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use helius::Helius;
 use rust_decimal::Decimal;
 
+use crate::launchpad::Client;
 use crate::launchpad::Launchpad;
 
 pub struct PumpFun {
@@ -22,7 +22,7 @@ impl PumpFun {
 impl Launchpad for PumpFun {
     async fn buy(
         &mut self,
-        client: &Helius,
+        client: &Client,
 
         mint: &str,
         amount: Decimal,
@@ -34,7 +34,7 @@ impl Launchpad for PumpFun {
 
     async fn sell(
         &mut self,
-        client: &Helius,
+        client: &Client,
 
         mint: &str,
         amount: u8,

@@ -4,7 +4,7 @@ use rust_decimal::Decimal;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, mpsc};
 
-use crate::{data::NewToken, launchpad::pump_fun::PumpFun};
+use crate::{data::Event, launchpad::pump_fun::PumpFun};
 
 pub struct Client(
     pub  Mutex<
@@ -44,7 +44,7 @@ pub trait Launchpad: Send + Sync {
         slippage: u16,
     ) -> anyhow::Result<()>;
 
-    async fn listen(client: Arc<Client>, tx: mpsc::Sender<NewToken>) -> anyhow::Result<()>;
+    async fn listen(client: Arc<Client>, tx: mpsc::Sender<Event>) -> anyhow::Result<()>;
 
     fn get_positions(&self) -> HashMap<String, Decimal>;
 }
@@ -113,7 +113,7 @@ impl Executor {
         Ok(())
     }
 
-    pub async fn listen(self: &Arc<Self>) -> anyhow::Result<mpsc::Receiver<NewToken>> {
+    pub async fn listen(self: &Arc<Self>) -> anyhow::Result<mpsc::Receiver<Event>> {
         let (tx, rx) = mpsc::channel(100);
 
         tokio::spawn(PumpFun::listen(self.new_tokens_client.clone(), tx));

@@ -3,6 +3,12 @@ pub mod tradelog;
 
 use serde::Deserialize;
 
+#[derive(Debug, Clone)]
+pub enum Event {
+    NewToken(NewToken),
+    Trade(Trade),
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct NewToken {
     pub mint: String,

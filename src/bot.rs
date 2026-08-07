@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, mpsc, watch};
 
 use crate::{
     data::{
-        NewToken,
+        Event, NewToken,
         account::{Account, AccountManager},
         tradelog::TradeLog,
     },
@@ -77,13 +77,25 @@ impl Bot {
         Ok(())
     }
 
-    pub async fn tick(self: &Arc<Self>, rx: &mut mpsc::Receiver<NewToken>) -> anyhow::Result<bool> {
-        if let Some(token) = rx.recv().await {
-            self.strategy
-                .lock()
-                .await
-                .on_new_coin(self.clone(), token)
-                .await?;
+    pub async fn tick(self: &Arc<Self>, rx: &mut mpsc::Receiver<Event>) -> anyhow::Result<bool> {
+        if let Some(event) = rx.recv().await {
+            match event {
+                Event::NewToken(token) => {
+                    self.strategy
+                        .lock()
+                        .await
+                        .on_new_coin(self.clone(), token)
+                        .await?;
+                }
+
+                Event::Trade(trade) => {
+                    self.strategy
+                        .lock()
+                        .await
+                        .on_trade(self.clone(), trade)
+                        .await?;
+                }
+            }
 
             Ok(false)
         } else {

@@ -9,6 +9,7 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::data::Event;
 use crate::data::NewToken;
 use crate::launchpad::Client;
 use crate::launchpad::Launchpad;
@@ -55,7 +56,7 @@ impl Launchpad for PumpFun {
         Ok(())
     }
 
-    async fn listen(client: Arc<Client>, tx: mpsc::Sender<NewToken>) -> anyhow::Result<()> {
+    async fn listen(client: Arc<Client>, tx: mpsc::Sender<Event>) -> anyhow::Result<()> {
         let mut ws = client.0.lock().await;
 
         ws.send(
@@ -124,7 +125,7 @@ impl Launchpad for PumpFun {
                 token.mint
             );
 
-            if tx.send(token).await.is_err() {
+            if tx.send(Event::NewToken(token)).await.is_err() {
                 break;
             }
         }

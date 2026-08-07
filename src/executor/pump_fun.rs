@@ -93,15 +93,17 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        self.trade(
-            "buy",
-            mint,
-            amount.round_dp(3).to_string(),
-            priority,
-            slippage,
-            true,
-        )
-        .await
+        println!("BUY {mint} {amount} SOL");
+        Ok(())
+        // self.trade(
+        //     "buy",
+        //     mint,
+        //     amount.round_dp(3).to_string(),
+        //     priority,
+        //     slippage,
+        //     true,
+        // )
+        // .await
     }
 
     async fn sell(
@@ -111,15 +113,17 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        self.trade(
-            "sell",
-            mint,
-            amount.round_dp(3).to_string(),
-            priority,
-            slippage,
-            false,
-        )
-        .await
+        println!("SELL {mint} {amount} SOL");
+        Ok(())
+        // self.trade(
+        //     "sell",
+        //     mint,
+        //     amount.round_dp(3).to_string(),
+        //     priority,
+        //     slippage,
+        //     false,
+        // )
+        // .await
     }
 
     async fn sell_percent(
@@ -129,14 +133,16 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        self.trade(
-            "sell",
-            mint,
-            format!("{amount}%"),
-            priority,
-            slippage,
-            false,
-        )
-        .await
+        println!("SELL {mint} {amount}%");
+        Ok(())
+        // self.trade(
+        //     "sell",
+        //     mint,
+        //     format!("{amount}%"),
+        //     priority,
+        //     slippage,
+        //     false,
+        // )
+        // .await
     }
 }

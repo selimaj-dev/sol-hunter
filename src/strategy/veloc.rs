@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -11,8 +11,7 @@ use crate::types::{NewToken, Trade, TradeType};
 const BUY_AMOUNT_SOL: Decimal = dec!(0.2);
 const PRIORITY: Decimal = dec!(0.0002);
 const SLIPPAGE: u16 = 10;
-
-// --- Strategy Implementation ---
+const MAX_SUBSCRIBED_TOKENS: usize = 5;
 
 struct TokenTracker {
     created_at: Instant,
@@ -28,14 +27,15 @@ struct OpenPosition {
 }
 
 pub struct MomentumVelocityStrategy {
-    // Configurable thresholds
     min_unique_buyers: usize,
     min_net_sol_flow: f64,
     max_tracking_duration: Duration,
 
-    // In-memory state tracking
     trackers: HashMap<String, TokenTracker>,
     positions: HashMap<String, OpenPosition>,
+
+    // Tracks active token subscriptions to enforce <= 5 limit
+    active_subscriptions: VecDeque<String>,
 }
 
 impl MomentumVelocityStrategy {
@@ -46,26 +46,51 @@ impl MomentumVelocityStrategy {
             max_tracking_duration: Duration::from_secs(45),
             trackers: HashMap::new(),
             positions: HashMap::new(),
+            active_subscriptions: VecDeque::with_capacity(MAX_SUBSCRIBED_TOKENS),
         }
     }
 
-    /// Calculate approximate token price in SOL using the bonding curve reserves
     fn calculate_price_sol(&self, trade: &Trade) -> f64 {
         if trade.v_tokens_in_bonding_curve == 0.0 {
             return 0.0;
         }
         trade.v_sol_in_bonding_curve / trade.v_tokens_in_bonding_curve
     }
+
+    /// Internal helper to safely handle unsubscribing and cleaning state
+    async fn cleanup_and_unsubscribe(&mut self, bot: &Arc<Bot>, mint: &str) -> anyhow::Result<()> {
+        bot.unsubscribe(mint).await?;
+        self.trackers.remove(mint);
+        self.active_subscriptions.retain(|m| m != mint);
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
 impl Strategy for MomentumVelocityStrategy {
-    async fn on_new_coin(&mut self, _bot: Arc<Bot>, token: NewToken) -> anyhow::Result<()> {
-        // Cleanup old untracked tokens to keep memory lean
-        self.trackers
-            .retain(|_, v| v.created_at.elapsed() < Duration::from_secs(120));
+    async fn on_new_coin(&mut self, bot: Arc<Bot>, token: NewToken) -> anyhow::Result<()> {
+        // If we hold an active position in this mint already, skip tracking setup
+        if self.positions.contains_key(&token.mint) {
+            return Ok(());
+        }
 
-        // Initialize tracking for new token
+        // Enforce maximum 5 active subscriptions
+        while self.active_subscriptions.len() >= MAX_SUBSCRIBED_TOKENS {
+            if let Some(oldest_mint) = self.active_subscriptions.pop_front() {
+                // Do not drop subscription if we currently hold an open position in it
+                if self.positions.contains_key(&oldest_mint) {
+                    continue;
+                }
+                bot.unsubscribe(&oldest_mint).await?;
+                self.trackers.remove(&oldest_mint);
+            }
+        }
+
+        // Subscribe to new token
+        bot.subscribe(&token.mint).await?;
+        self.active_subscriptions.push_back(token.mint.clone());
+
+        // Initialize tracking
         self.trackers.insert(
             token.mint,
             TokenTracker {
@@ -89,7 +114,6 @@ impl Strategy for MomentumVelocityStrategy {
         if let Some(pos) = self.positions.get_mut(mint) {
             let price_change_pct = (current_price - pos.entry_price_sol) / pos.entry_price_sol;
 
-            // Track peak price for trailing stop logic
             if current_price > pos.highest_price_sol {
                 pos.highest_price_sol = current_price;
                 pos.last_high_time = Instant::now();
@@ -113,7 +137,7 @@ impl Strategy for MomentumVelocityStrategy {
                     .await?;
 
                 self.positions.remove(mint);
-                self.trackers.remove(mint);
+                self.cleanup_and_unsubscribe(&bot, mint).await?;
             }
 
             return Ok(());
@@ -123,13 +147,13 @@ impl Strategy for MomentumVelocityStrategy {
         // 2. Evaluate Potential Buys
         // -------------------------------------------------------------
         if let Some(tracker) = self.trackers.get_mut(mint) {
-            // Stop monitoring if the token is older than maximum initial evaluation window
+            // Unsubscribe & remove if evaluation window expired without a signal
             if tracker.created_at.elapsed() > self.max_tracking_duration {
-                self.trackers.remove(mint);
+                self.cleanup_and_unsubscribe(&bot, mint).await?;
                 return Ok(());
             }
 
-            // Update stats
+            // Update trade metrics
             tracker.trade_count += 1;
             match trade.tx_type {
                 TradeType::Buy => {
@@ -141,11 +165,8 @@ impl Strategy for MomentumVelocityStrategy {
                 }
             }
 
-            // Check BUY conditions
             let has_enough_buyers = tracker.unique_buyers.len() >= self.min_unique_buyers;
             let has_volume_surge = tracker.net_sol_flow >= self.min_net_sol_flow;
-
-            // Skip if bonding curve is already close to completing (e.g. >30 SOL in curve)
             let is_early_curve = trade.v_sol_in_bonding_curve < 60.0;
 
             if has_enough_buyers && has_volume_surge && is_early_curve {
@@ -165,7 +186,7 @@ impl Strategy for MomentumVelocityStrategy {
                     },
                 );
 
-                // Stop tracking buy metrics for this token
+                // Stop tracking buy metrics (subscription remains active while holding position)
                 self.trackers.remove(mint);
             }
         }

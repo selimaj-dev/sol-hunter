@@ -1,15 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use helius::Helius;
 
 use tokio::sync::{Mutex, watch};
 
 use crate::{
-    account::{Account, AccountManager},
-    executor::{ExecutorWrapper, pump_fun::PumpDev},
+    data::account::{Account, AccountManager},
+    data::tradelog::TradeLog,
     strategy::{Strategy, veloc::MomentumVelocityStrategy},
-    tradelog::TradeLog,
 };
 
 pub struct Bot {
@@ -18,7 +17,7 @@ pub struct Bot {
 
     pub strategy: Mutex<Box<dyn Strategy>>,
 
-    pub executor: Mutex<ExecutorWrapper>,
+    pub executor: Mutex<()>,
     pub trade_log: Mutex<Vec<TradeLog>>,
 
     pub helius: Helius,
@@ -42,10 +41,7 @@ impl Bot {
             strategy: Mutex::new(Box::new(MomentumVelocityStrategy::new())),
 
             trade_log: Mutex::new(Vec::new()),
-            executor: Mutex::new(ExecutorWrapper {
-                executor: Box::new(PumpDev {}),
-                positions: HashMap::new(),
-            }),
+            executor: Mutex::new(()),
         }))
     }
 
@@ -84,6 +80,11 @@ impl Bot {
     }
 
     pub async fn tick(self: &Arc<Self>) -> anyhow::Result<bool> {
+        let ws = self
+            .helius
+            .ws()
+            .ok_or_else(|| anyhow!("Unable to obtain ws"))?;
+
         // drop(ws);
         // self.strategy
         //     .lock()

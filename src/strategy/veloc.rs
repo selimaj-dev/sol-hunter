@@ -6,8 +6,8 @@ use log::{debug, info, trace, warn};
 use rust_decimal::{Decimal, dec};
 
 use crate::bot::Bot;
+use crate::data::tradelog::{ExitReason, TradeLog};
 use crate::strategy::Strategy;
-use crate::tradelog::{ExitReason, TradeLog};
 use crate::types::{NewToken, Trade, TradeType};
 
 const BUY_AMOUNT_SOL: Decimal = dec!(0.2);

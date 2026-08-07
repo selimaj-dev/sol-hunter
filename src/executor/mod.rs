@@ -4,8 +4,6 @@ use std::collections::HashMap;
 
 use rust_decimal::Decimal;
 
-use crate::account::Account;
-
 pub struct ExecutorWrapper {
     pub executor: Box<dyn Executor>,
     pub positions: HashMap<String, Decimal>,
@@ -42,14 +40,6 @@ pub trait Executor: Send + Sync {
         slippage: u16,
     ) -> anyhow::Result<()> {
         Ok(())
-    }
-}
-
-impl Account {
-    pub fn executor(self) -> impl Executor {
-        match self {
-            Self::PumpDev(account) => pump_fun::PumpDev::new(account),
-        }
     }
 }
 

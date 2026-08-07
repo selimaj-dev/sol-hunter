@@ -11,7 +11,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 use crate::{
     account::AccountManager,
-    executor::ExecutorWrapper,
+    executor::{ExecutorWrapper, pump_fun::PumpDev},
     strategy::{Strategy, veloc::MomentumVelocityStrategy},
     tradelog::TradeLog,
 };
@@ -73,7 +73,7 @@ impl Bot {
         Ok(Arc::new(Self {
             ws: Mutex::new(connect_async("wss://pumpdev.io/ws").await?.0),
             executor: Mutex::new(ExecutorWrapper {
-                executor: Box::new(account.executor()),
+                executor: Box::new(PumpDev { account }),
                 positions: HashMap::new(),
             }),
             accounts: Mutex::new(accounts),
@@ -97,7 +97,7 @@ impl Bot {
             .context("Failed to get account")?
             .clone();
 
-        self.executor.lock().await.executor = Box::new(account.executor());
+        self.executor.lock().await.executor = Box::new(PumpDev { account });
 
         Ok(())
     }

@@ -1,7 +1,10 @@
 mod pump_fun;
 
 use rust_decimal::Decimal;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tokio::sync::{Mutex, mpsc};
 
 use crate::{data::Event, launchpad::pump_fun::PumpFun};
@@ -13,6 +16,7 @@ type ClientMutex = Mutex<
 pub struct Client {
     pub helius: ClientMutex,
     pub solana: ClientMutex,
+    pub subscribed: Mutex<HashSet<String>>,
 }
 
 pub struct Executor {
@@ -72,6 +76,8 @@ impl Executor {
                         .await?
                         .0,
                 ),
+
+                subscribed: Mutex::new(HashSet::new()),
             }),
 
             event_tx: Mutex::new(tx),
@@ -133,11 +139,11 @@ impl Executor {
         Ok(rx)
     }
 
-    pub async fn subscribe(&self, mint: &str) -> anyhow::Result<()> {
-        Ok(())
+    pub async fn subscribe(&self, mint: &str) {
+        self.client.subscribed.lock().await.insert(mint.to_string());
     }
 
-    pub async fn unsubscribe(&self, mint: &str) -> anyhow::Result<()> {
-        Ok(())
+    pub async fn unsubscribe(&self, mint: &str) {
+        self.client.subscribed.lock().await.remove(mint);
     }
 }

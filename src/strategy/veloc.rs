@@ -64,9 +64,7 @@ impl MomentumVelocityStrategy {
     /// Internal helper to safely handle unsubscribing and cleaning state
     async fn cleanup_and_unsubscribe(&mut self, bot: &Arc<Bot>, mint: &str) -> anyhow::Result<()> {
         debug!("[{}] Cleaning up state and unsubscribing", mint);
-        if let Err(e) = bot.executor.unsubscribe(mint).await {
-            warn!("[{}] Unsubscribe request failed: {:?}", mint, e);
-        }
+        bot.executor.unsubscribe(mint).await;
         self.trackers.remove(mint);
         self.active_subscriptions.retain(|m| m != mint);
         Ok(())
@@ -103,7 +101,7 @@ impl Strategy for MomentumVelocityStrategy {
                         "[{}] Capacity reached ({}/{}). Evicting un-bought token from queue.",
                         mint_to_remove, MAX_SUBSCRIBED_TOKENS, MAX_SUBSCRIBED_TOKENS
                     );
-                    let _ = bot.executor.unsubscribe(&mint_to_remove).await;
+                    bot.executor.unsubscribe(&mint_to_remove).await;
                     self.trackers.remove(&mint_to_remove);
                 }
             } else {
@@ -116,7 +114,7 @@ impl Strategy for MomentumVelocityStrategy {
         }
 
         info!("[{}] Subscribing and creating tracker.", token.mint);
-        bot.executor.subscribe(&token.mint).await?;
+        bot.executor.subscribe(&token.mint).await;
         self.active_subscriptions.push_back(token.mint.clone());
 
         self.trackers.insert(

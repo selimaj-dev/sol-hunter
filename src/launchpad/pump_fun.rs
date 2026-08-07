@@ -120,7 +120,9 @@ impl Launchpad for PumpFun {
                 if let Some(trade) =
                     parse_trade_event(&data, notification.params.result.value.signature.clone())
                 {
-                    tx.send(Event::Trade(trade)).await?;
+                    if client.subscribed.lock().await.contains(&trade.mint) {
+                        tx.send(Event::Trade(trade)).await?;
+                    }
                 }
             }
         }

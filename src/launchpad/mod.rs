@@ -1,11 +1,15 @@
 mod pump_fun;
 
 use crate::launchpad::pump_fun::PumpFun;
+use helius::Helius;
 use rust_decimal::Decimal;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
 pub struct Executor {
-    pub pump_fun: PumpFun,
+    pub client: Helius,
+
+    pub pump_fun: Mutex<PumpFun>,
 }
 
 #[allow(unused_variables)]
@@ -13,6 +17,8 @@ pub struct Executor {
 pub trait Launchpad: Send + Sync {
     async fn buy(
         &mut self,
+        client: &Helius,
+
         mint: &str,
         amount: Decimal,
         priority: Decimal,
@@ -21,6 +27,8 @@ pub trait Launchpad: Send + Sync {
 
     async fn sell(
         &mut self,
+        client: &Helius,
+
         mint: &str,
         amount: u8,
         priority: Decimal,
@@ -31,35 +39,52 @@ pub trait Launchpad: Send + Sync {
 }
 
 impl Executor {
-    pub fn new() -> Self {
-        Self {
-            pump_fun: PumpFun::new(),
-        }
+    pub async fn new(api_key: &str) -> anyhow::Result<Arc<Self>> {
+        Ok(Arc::new(Self {
+            client: Helius::new_async(api_key, helius::types::Cluster::Devnet).await?,
+
+            pump_fun: Mutex::new(PumpFun::new()),
+        }))
     }
 
     pub async fn buy(
-        &mut self,
+        self: &Arc<Self>,
         mint: &str,
         amount: Decimal,
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        self.pump_fun.buy(mint, amount, priority, slippage).await
+        self.pump_fun
+            .lock()
+            .await
+            .buy(&self.client, mint, amount, priority, slippage)
+            .await
     }
 
     pub async fn sell(
-        &mut self,
+        self: &Arc<Self>,
         mint: &str,
         amount: u8,
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        self.pump_fun.sell(mint, amount, priority, slippage).await
+        self.pump_fun
+            .lock()
+            .await
+            .sell(&self.client, mint, amount, priority, slippage)
+            .await
     }
 
-    pub async fn sell_all(&mut self, priority: Decimal, slippage: u16) -> anyhow::Result<()> {
-        for (mint, _) in self.pump_fun.get_positions() {
-            self.pump_fun.sell(&mint, 100, priority, slippage).await?;
+    pub async fn sell_all(
+        self: &Arc<Self>,
+        priority: Decimal,
+        slippage: u16,
+    ) -> anyhow::Result<()> {
+        let mut pump = self.pump_fun.lock().await;
+
+        for (mint, _) in pump.get_positions() {
+            pump.sell(&self.client, &mint, 100, priority, slippage)
+                .await?;
         }
 
         Ok(())

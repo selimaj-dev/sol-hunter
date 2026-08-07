@@ -75,7 +75,7 @@ impl MomentumVelocityStrategy {
 #[async_trait::async_trait]
 impl Strategy for MomentumVelocityStrategy {
     async fn execute_sell_all(&mut self, bot: Arc<Bot>) -> anyhow::Result<()> {
-        bot.executor.lock().await.sell_all(PRIORITY, SLIPPAGE).await
+        bot.executor.sell_all(PRIORITY, SLIPPAGE).await
     }
 
     async fn on_new_coin(&mut self, bot: Arc<Bot>, token: NewToken) -> anyhow::Result<()> {
@@ -170,11 +170,7 @@ impl Strategy for MomentumVelocityStrategy {
                     price_change_pct * 100.0
                 );
 
-                bot.executor
-                    .lock()
-                    .await
-                    .sell(mint, 100, PRIORITY, SLIPPAGE)
-                    .await?;
+                bot.executor.sell(mint, 100, PRIORITY, SLIPPAGE).await?;
 
                 if let Some(mut pos) = self.positions.remove(mint) {
                     pos.trade.close(current_price, reason);
@@ -244,8 +240,6 @@ impl Strategy for MomentumVelocityStrategy {
                 );
 
                 bot.executor
-                    .lock()
-                    .await
                     .buy(mint, BUY_AMOUNT_SOL, PRIORITY, SLIPPAGE)
                     .await?;
 

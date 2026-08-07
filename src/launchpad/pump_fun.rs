@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use helius::Helius;
 use rust_decimal::Decimal;
 
 use crate::launchpad::Launchpad;
@@ -21,6 +22,8 @@ impl PumpFun {
 impl Launchpad for PumpFun {
     async fn buy(
         &mut self,
+        client: &Helius,
+
         mint: &str,
         amount: Decimal,
         priority: Decimal,
@@ -31,6 +34,8 @@ impl Launchpad for PumpFun {
 
     async fn sell(
         &mut self,
+        client: &Helius,
+
         mint: &str,
         amount: u8,
         priority: Decimal,

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
-use helius::Helius;
+use anyhow::Context;
 
 use tokio::sync::{Mutex, watch};
 
@@ -15,15 +14,11 @@ use crate::{
 };
 
 pub struct Bot {
+    pub executor: Arc<Executor>,
+    pub strategy: Mutex<Box<dyn Strategy>>,
     pub account_manager: Mutex<AccountManager>,
     pub current_account: Mutex<Account>,
-
-    pub strategy: Mutex<Box<dyn Strategy>>,
-
-    pub executor: Mutex<Executor>,
     pub trade_log: Mutex<Vec<TradeLog>>,
-
-    pub helius: Helius,
 }
 
 impl Bot {
@@ -37,14 +32,11 @@ impl Bot {
             .clone();
 
         Ok(Arc::new(Self {
-            helius: Helius::new_async(&accounts.api_key, helius::types::Cluster::Devnet).await?,
-
+            executor: Executor::new(&accounts.api_key).await?,
+            strategy: Mutex::new(Box::new(MomentumVelocityStrategy::new())),
             account_manager: Mutex::new(accounts),
             current_account: Mutex::new(account),
-            strategy: Mutex::new(Box::new(MomentumVelocityStrategy::new())),
-
             trade_log: Mutex::new(Vec::new()),
-            executor: Mutex::new(Executor::new()),
         }))
     }
 
@@ -83,11 +75,6 @@ impl Bot {
     }
 
     pub async fn tick(self: &Arc<Self>) -> anyhow::Result<bool> {
-        let ws = self
-            .helius
-            .ws()
-            .ok_or_else(|| anyhow!("Unable to obtain ws"))?;
-
         // drop(ws);
         // self.strategy
         //     .lock()

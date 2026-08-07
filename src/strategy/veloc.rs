@@ -5,16 +5,15 @@ use std::time::{Duration, Instant};
 use log::{debug, info, trace, warn};
 use rust_decimal::{Decimal, dec};
 
-use super::{NewToken, Trade};
 use crate::bot::Bot;
-use crate::data::TradeType;
 use crate::data::tradelog::{ExitReason, TradeLog};
+use crate::data::{NewToken, Trade, TradeType};
 use crate::strategy::Strategy;
 
 const BUY_AMOUNT_SOL: Decimal = dec!(0.2);
 const PRIORITY: Decimal = dec!(0.0002);
 const SLIPPAGE: u16 = 10;
-const MAX_SUBSCRIBED_TOKENS: usize = 100;
+const MAX_SUBSCRIBED_TOKENS: usize = 25;
 
 struct TokenTracker {
     created_at: Instant,
@@ -65,6 +64,9 @@ impl MomentumVelocityStrategy {
     async fn cleanup_and_unsubscribe(&mut self, bot: &Arc<Bot>, mint: &str) -> anyhow::Result<()> {
         debug!("[{}] Cleaning up state and unsubscribing", mint);
         bot.executor.unsubscribe(mint).await;
+        // if let Err(e) = bot.executor.unsubscribe(mint).await {
+        //     warn!("[{}] Unsubscribe request failed: {:?}", mint, e);
+        // }
         self.trackers.remove(mint);
         self.active_subscriptions.retain(|m| m != mint);
         Ok(())
@@ -97,6 +99,10 @@ impl Strategy for MomentumVelocityStrategy {
 
             if let Some(idx) = eviction_index {
                 if let Some(mint_to_remove) = self.active_subscriptions.remove(idx) {
+                    debug!(
+                        "[{}] Capacity reached ({}/{}). Evicting un-bought token from queue.",
+                        mint_to_remove, MAX_SUBSCRIBED_TOKENS, MAX_SUBSCRIBED_TOKENS
+                    );
                     bot.executor.unsubscribe(&mint_to_remove).await;
                     self.trackers.remove(&mint_to_remove);
                 }
@@ -109,6 +115,7 @@ impl Strategy for MomentumVelocityStrategy {
             }
         }
 
+        debug!("[{}] Subscribing and creating tracker.", token.mint);
         bot.executor.subscribe(&token.mint).await;
         self.active_subscriptions.push_back(token.mint.clone());
 

@@ -14,7 +14,7 @@ use crate::strategy::Strategy;
 const BUY_AMOUNT_SOL: Decimal = dec!(0.2);
 const PRIORITY: Decimal = dec!(0.0002);
 const SLIPPAGE: u16 = 10;
-const MAX_SUBSCRIBED_TOKENS: usize = 5;
+const MAX_SUBSCRIBED_TOKENS: usize = 100;
 
 struct TokenTracker {
     created_at: Instant,
@@ -97,10 +97,6 @@ impl Strategy for MomentumVelocityStrategy {
 
             if let Some(idx) = eviction_index {
                 if let Some(mint_to_remove) = self.active_subscriptions.remove(idx) {
-                    info!(
-                        "[{}] Capacity reached ({}/{}). Evicting un-bought token from queue.",
-                        mint_to_remove, MAX_SUBSCRIBED_TOKENS, MAX_SUBSCRIBED_TOKENS
-                    );
                     bot.executor.unsubscribe(&mint_to_remove).await;
                     self.trackers.remove(&mint_to_remove);
                 }
@@ -113,7 +109,6 @@ impl Strategy for MomentumVelocityStrategy {
             }
         }
 
-        info!("[{}] Subscribing and creating tracker.", token.mint);
         bot.executor.subscribe(&token.mint).await;
         self.active_subscriptions.push_back(token.mint.clone());
 
@@ -155,7 +150,7 @@ impl Strategy for MomentumVelocityStrategy {
                 _ if drop_from_peak >= 0.12 && price_change_pct > 0.10 => {
                     Some(ExitReason::TrailingStop)
                 }
-                _ if pos.last_high_time.elapsed() >= Duration::from_secs(25) => {
+                _ if pos.last_high_time.elapsed() >= Duration::from_secs(2) => {
                     Some(ExitReason::MomentumStalled)
                 }
                 _ => None,

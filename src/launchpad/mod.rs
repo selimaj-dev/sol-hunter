@@ -16,6 +16,7 @@ pub struct Client(
 
 pub struct Executor {
     pub client: Arc<Client>,
+    pub new_tokens_client: Arc<Client>,
 
     pub pump_fun: Mutex<PumpFun>,
 }
@@ -57,6 +58,12 @@ impl Executor {
                 ))
                 .await?
                 .0,
+            ))),
+
+            new_tokens_client: Arc::new(Client(Mutex::new(
+                tokio_tungstenite::connect_async(format!("wss://api.mainnet-beta.solana.com"))
+                    .await?
+                    .0,
             ))),
 
             pump_fun: Mutex::new(PumpFun::new()),
@@ -109,7 +116,7 @@ impl Executor {
     pub async fn listen(self: &Arc<Self>) -> anyhow::Result<mpsc::Receiver<NewToken>> {
         let (tx, rx) = mpsc::channel(100);
 
-        tokio::spawn(PumpFun::listen(self.client.clone(), tx));
+        tokio::spawn(PumpFun::listen(self.new_tokens_client.clone(), tx));
 
         Ok(rx)
     }

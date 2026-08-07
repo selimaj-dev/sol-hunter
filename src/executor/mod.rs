@@ -121,24 +121,10 @@ impl ExecutorWrapper {
     }
 
     pub async fn sell_all(&mut self, priority: Decimal, slippage: u16) -> anyhow::Result<()> {
-        let positions: Vec<(String, Decimal)> = self
-            .positions
-            .iter()
-            .map(|(mint, amount)| (mint.clone(), *amount))
-            .collect();
-
-        for (mint, amount) in positions {
+        for (mint, _) in self.positions.drain() {
             self.executor
-                .sell(&mint, amount, priority, slippage)
+                .sell_percent(&mint, 100, priority, slippage)
                 .await?;
-
-            if let Some(position) = self.positions.get_mut(&mint) {
-                *position -= amount;
-
-                if *position <= Decimal::ZERO {
-                    self.positions.remove(&mint);
-                }
-            }
         }
 
         Ok(())

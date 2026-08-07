@@ -1,6 +1,6 @@
-use std::time::{Duration, Instant};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExitReason {
     TakeProfit,
     StopLoss,
@@ -8,18 +8,18 @@ pub enum ExitReason {
     MomentumStalled,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeLog {
     pub mint: String,
 
-    pub opened_at: Instant,
-    pub closed_at: Option<Instant>,
+    pub opened_at: chrono::DateTime<chrono::Utc>,
+    pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
 
     pub entry_price_sol: f64,
     pub exit_price_sol: Option<f64>,
 
     pub pnl_percent: Option<f64>,
-    pub duration: Option<Duration>,
+    pub duration: Option<chrono::TimeDelta>,
 
     pub exit_reason: Option<ExitReason>,
 
@@ -39,7 +39,7 @@ impl TradeLog {
     ) -> Self {
         Self {
             mint,
-            opened_at: Instant::now(),
+            opened_at: chrono::Utc::now(),
             closed_at: None,
 
             entry_price_sol,
@@ -57,7 +57,7 @@ impl TradeLog {
     }
 
     pub fn close(&mut self, exit_price_sol: f64, reason: ExitReason) {
-        let now = Instant::now();
+        let now = chrono::Utc::now();
 
         let pnl = ((exit_price_sol - self.entry_price_sol) / self.entry_price_sol) * 100.0;
 
@@ -65,7 +65,7 @@ impl TradeLog {
         self.pnl_percent = Some(pnl);
 
         self.closed_at = Some(now);
-        self.duration = Some(now.duration_since(self.opened_at));
+        self.duration = Some(now.signed_duration_since(self.opened_at));
 
         self.exit_reason = Some(reason);
     }

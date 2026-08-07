@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{Mutex, mpsc, watch};
 
 use crate::{
     data::{
@@ -44,6 +44,8 @@ impl Bot {
         self: &Arc<Self>,
         mut shutdown: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
+        let mut rx = self.executor.listen().await?;
+
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
@@ -62,7 +64,7 @@ impl Bot {
                     }
                 }
 
-                result = self.tick() => {
+                result = self.tick(&mut rx) => {
                     if result? {
                         log::warn!("Websocket closed.");
                         break;
@@ -74,22 +76,26 @@ impl Bot {
         Ok(())
     }
 
-    pub async fn tick(self: &Arc<Self>) -> anyhow::Result<bool> {
-        // drop(ws);
-        // self.strategy
-        //     .lock()
-        //     .await
-        //     .on_new_coin(self.clone(), token)
-        //     .await?;
+    pub async fn tick(self: &Arc<Self>, rx: &mut mpsc::Receiver<u32>) -> anyhow::Result<bool> {
+        if let Some(data) = rx.recv().await {
+            // drop(ws);
+            // self.strategy
+            //     .lock()
+            //     .await
+            //     .on_new_coin(self.clone(), token)
+            //     .await?;
 
-        // drop(ws);
-        // self.strategy
-        //     .lock()
-        //     .await
-        //     .on_trade(self.clone(), trade)
-        //     .await?;
+            // drop(ws);
+            // self.strategy
+            //     .lock()
+            //     .await
+            //     .on_trade(self.clone(), trade)
+            //     .await?;
 
-        Ok(false)
+            Ok(false)
+        } else {
+            Ok(true)
+        }
     }
 }
 

@@ -1,10 +1,11 @@
 mod pump_fun;
 
 use crate::launchpad::pump_fun::PumpFun;
+use anyhow::Context;
 use helius::Helius;
 use rust_decimal::Decimal;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc};
 
 pub struct Executor {
     pub client: Helius,
@@ -88,5 +89,15 @@ impl Executor {
         }
 
         Ok(())
+    }
+
+    pub async fn listen(self: &Arc<Self>) -> anyhow::Result<mpsc::Receiver<u32>> {
+        let (tx, rx) = mpsc::channel(10);
+
+        let ws = self.client.ws().context("Failed to get WebSocket")?;
+
+        tokio::spawn(async move {});
+
+        Ok(rx)
     }
 }

@@ -6,17 +6,19 @@ use tokio::sync::{Mutex, mpsc};
 
 use crate::{data::Event, launchpad::pump_fun::PumpFun};
 
-pub struct Client(
-    pub  Mutex<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-    >,
-);
+type ClientMutex = Mutex<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+>;
+
+pub struct Client {
+    pub helius: ClientMutex,
+    pub solana: ClientMutex,
+}
 
 pub struct Executor {
     pub client: Arc<Client>,
-    pub new_tokens_client: Arc<Client>,
+
+    pub event_tx: Mutex<mpsc::Sender<Event>>,
 
     pub pump_fun: Mutex<PumpFun>,
 }
@@ -51,20 +53,28 @@ pub trait Launchpad: Send + Sync {
 
 impl Executor {
     pub async fn new(api_key: &str) -> anyhow::Result<Arc<Self>> {
-        Ok(Arc::new(Self {
-            client: Arc::new(Client(Mutex::new(
-                tokio_tungstenite::connect_async(format!(
-                    "wss://mainnet.helius-rpc.com/?api-key={api_key}"
-                ))
-                .await?
-                .0,
-            ))),
+        let (tx, _) = mpsc::channel(1);
 
-            new_tokens_client: Arc::new(Client(Mutex::new(
-                tokio_tungstenite::connect_async(format!("wss://api.mainnet-beta.solana.com"))
+        tx.closed().await;
+
+        Ok(Arc::new(Self {
+            client: Arc::new(Client {
+                helius: Mutex::new(
+                    tokio_tungstenite::connect_async(format!(
+                        "wss://mainnet.helius-rpc.com/?api-key={api_key}"
+                    ))
                     .await?
                     .0,
-            ))),
+                ),
+
+                solana: Mutex::new(
+                    tokio_tungstenite::connect_async(format!("wss://api.mainnet-beta.solana.com"))
+                        .await?
+                        .0,
+                ),
+            }),
+
+            event_tx: Mutex::new(tx),
 
             pump_fun: Mutex::new(PumpFun::new()),
         }))
@@ -116,8 +126,18 @@ impl Executor {
     pub async fn listen(self: &Arc<Self>) -> anyhow::Result<mpsc::Receiver<Event>> {
         let (tx, rx) = mpsc::channel(100);
 
-        tokio::spawn(PumpFun::listen(self.new_tokens_client.clone(), tx));
+        *self.event_tx.lock().await = tx.clone();
+
+        tokio::spawn(PumpFun::listen(self.client.clone(), tx));
 
         Ok(rx)
+    }
+
+    pub async fn subscribe(&self, mint: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    pub async fn unsubscribe(&self, mint: &str) -> anyhow::Result<()> {
+        Ok(())
     }
 }

@@ -57,7 +57,7 @@ impl Launchpad for PumpFun {
     }
 
     async fn listen(client: Arc<Client>, tx: mpsc::Sender<Event>) -> anyhow::Result<()> {
-        let mut ws = client.0.lock().await;
+        let mut ws = client.solana.lock().await;
 
         ws.send(
             serde_json::json!({
@@ -117,13 +117,6 @@ impl Launchpad for PumpFun {
                 uri: event.uri,
                 market_cap_sol: event.market_cap_sol,
             };
-
-            log::info!(
-                "[PUMP.FUN] New token: {} (${}) - {}",
-                token.name,
-                token.symbol,
-                token.mint
-            );
 
             if tx.send(Event::NewToken(token)).await.is_err() {
                 break;

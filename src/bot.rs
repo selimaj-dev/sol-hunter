@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, mpsc, watch};
 
 use crate::{
     data::{
-        Event, NewToken,
+        Event,
         account::{Account, AccountManager},
         tradelog::TradeLog,
     },
@@ -105,14 +105,6 @@ impl Bot {
 }
 
 impl Bot {
-    pub async fn subscribe(&self, mint: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub async fn unsubscribe(&self, mint: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
-
     pub async fn refresh_account(self: &Arc<Self>) -> anyhow::Result<()> {
         self.strategy
             .lock()

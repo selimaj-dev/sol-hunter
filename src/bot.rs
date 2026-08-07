@@ -10,6 +10,7 @@ use crate::{
     account::AccountManager,
     executor::Executor,
     strategy::{Strategy, veloc::MomentumVelocityStrategy},
+    tradelog::TradeLog,
 };
 
 pub struct Bot {
@@ -17,6 +18,7 @@ pub struct Bot {
     pub accounts: Mutex<AccountManager>,
     pub executor: Mutex<Box<dyn Executor>>,
     pub strategy: Mutex<Box<dyn Strategy>>,
+    pub trade_log: Mutex<Vec<TradeLog>>,
 }
 
 impl Bot {
@@ -70,6 +72,7 @@ impl Bot {
             executor: Mutex::new(Box::new(account.executor())),
             accounts: Mutex::new(accounts),
             strategy: Mutex::new(Box::new(MomentumVelocityStrategy::new())),
+            trade_log: Mutex::new(Vec::new()),
         }))
     }
 

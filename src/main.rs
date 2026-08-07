@@ -3,6 +3,7 @@ pub mod bot;
 pub mod executor;
 pub mod strategy;
 pub mod types;
+pub mod tradelog;
 
 use crate::bot::Bot;
 

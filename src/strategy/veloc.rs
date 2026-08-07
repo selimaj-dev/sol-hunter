@@ -7,6 +7,7 @@ use rust_decimal::{Decimal, dec};
 
 use crate::bot::Bot;
 use crate::strategy::Strategy;
+use crate::tradelog::{ExitReason, TradeLog};
 use crate::types::{NewToken, Trade, TradeType};
 
 const BUY_AMOUNT_SOL: Decimal = dec!(0.2);
@@ -22,7 +23,8 @@ struct TokenTracker {
 }
 
 struct OpenPosition {
-    entry_price_sol: f64,
+    trade: TradeLog,
+
     highest_price_sol: f64,
     last_high_time: Instant,
 }
@@ -133,7 +135,8 @@ impl Strategy for MomentumVelocityStrategy {
         // 1. Manage Active Positions (Take Profit / Stop Loss / Stall)
         // -------------------------------------------------------------
         if let Some(pos) = self.positions.get_mut(mint) {
-            let price_change_pct = (current_price - pos.entry_price_sol) / pos.entry_price_sol;
+            let price_change_pct =
+                (current_price - pos.trade.entry_price_sol) / pos.trade.entry_price_sol;
 
             if current_price > pos.highest_price_sol {
                 pos.highest_price_sol = current_price;
@@ -143,38 +146,38 @@ impl Strategy for MomentumVelocityStrategy {
 
             let drop_from_peak = (pos.highest_price_sol - current_price) / pos.highest_price_sol;
 
-            let (should_sell, reason) = match () {
-                _ if price_change_pct >= 0.40 => (
-                    true,
-                    format!("Take Profit (+{:.1}%)", price_change_pct * 100.0),
-                ),
-                _ if price_change_pct <= -0.1 => (
-                    true,
-                    format!("Hard Stop Loss ({:.1}%)", price_change_pct * 100.0),
-                ),
-                _ if drop_from_peak >= 0.12 && price_change_pct > 0.10 => (
-                    true,
-                    format!(
-                        "Trailing Stop (Peak drop: {:.1}%, gain: +{:.1}%)",
-                        drop_from_peak * 100.0,
-                        price_change_pct * 100.0
-                    ),
-                ),
-                _ if pos.last_high_time.elapsed() >= Duration::from_secs(25) => {
-                    (true, format!("Momentum Stalled (no high for 25s)"))
+            let should_sell = match () {
+                _ if price_change_pct >= 0.40 => Some(ExitReason::TakeProfit),
+                _ if price_change_pct <= -0.1 => Some(ExitReason::StopLoss),
+                _ if drop_from_peak >= 0.12 && price_change_pct > 0.10 => {
+                    Some(ExitReason::TrailingStop)
                 }
-                _ => (false, String::new()),
+                _ if pos.last_high_time.elapsed() >= Duration::from_secs(25) => {
+                    Some(ExitReason::MomentumStalled)
+                }
+                _ => None,
             };
 
-            if should_sell {
-                info!("[{}] EXECUTING SELL. Reason: {}", mint, reason);
+            if let Some(reason) = should_sell {
+                info!(
+                    "[{}] EXECUTING SELL. Reason: {:?} {:.1}%",
+                    mint,
+                    reason,
+                    price_change_pct * 100.0
+                );
+
                 bot.executor
                     .lock()
                     .await
                     .sell_percent(mint, 100, PRIORITY, SLIPPAGE)
                     .await?;
 
-                self.positions.remove(mint);
+                if let Some(mut pos) = self.positions.remove(mint) {
+                    pos.trade.close(current_price, reason);
+
+                    info!("TRADE RESULT: {:?}", pos.trade);
+                }
+
                 self.cleanup_and_unsubscribe(&bot, mint).await?;
             }
 
@@ -245,7 +248,13 @@ impl Strategy for MomentumVelocityStrategy {
                 self.positions.insert(
                     mint.clone(),
                     OpenPosition {
-                        entry_price_sol: current_price,
+                        trade: TradeLog::new(
+                            mint.clone(),
+                            current_price,
+                            tracker.unique_buyers.len(),
+                            tracker.net_sol_flow,
+                            trade.v_sol_in_bonding_curve,
+                        ),
                         highest_price_sol: current_price,
                         last_high_time: Instant::now(),
                     },

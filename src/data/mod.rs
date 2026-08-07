@@ -14,8 +14,6 @@ pub struct NewToken {
     pub uri: String,
     #[serde(rename = "marketCapSol")]
     pub market_cap_sol: f64,
-    #[serde(rename = "solAmount")]
-    pub sol_amount: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]

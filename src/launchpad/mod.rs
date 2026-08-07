@@ -1,11 +1,10 @@
 mod pump_fun;
 
-use crate::launchpad::pump_fun::PumpFun;
-use futures_util::StreamExt;
 use rust_decimal::Decimal;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, mpsc};
-use tokio_tungstenite::tungstenite::Message;
+
+use crate::{data::NewToken, launchpad::pump_fun::PumpFun};
 
 pub struct Client(
     pub  Mutex<
@@ -44,6 +43,8 @@ pub trait Launchpad: Send + Sync {
         slippage: u16,
     ) -> anyhow::Result<()>;
 
+    async fn listen(client: Arc<Client>, tx: mpsc::Sender<NewToken>) -> anyhow::Result<()>;
+
     fn get_positions(&self) -> HashMap<String, Decimal>;
 }
 
@@ -52,7 +53,7 @@ impl Executor {
         Ok(Arc::new(Self {
             client: Arc::new(Client(Mutex::new(
                 tokio_tungstenite::connect_async(format!(
-                    "wss://devnet.helius-rpc.com/?api-key={api_key}"
+                    "wss://mainnet.helius-rpc.com/?api-key={api_key}"
                 ))
                 .await?
                 .0,
@@ -105,19 +106,10 @@ impl Executor {
         Ok(())
     }
 
-    pub async fn listen(self: &Arc<Self>) -> anyhow::Result<mpsc::Receiver<u32>> {
-        let (tx, rx) = mpsc::channel(10);
+    pub async fn listen(self: &Arc<Self>) -> anyhow::Result<mpsc::Receiver<NewToken>> {
+        let (tx, rx) = mpsc::channel(100);
 
-        let client = self.client.clone();
-
-        tokio::spawn(async move {
-            match client.0.lock().await.next().await {
-                Some(Ok(Message::Text(msg))) => {}
-                Some(Ok(msg)) => {}
-                Some(Err(e)) => {}
-                None => {}
-            }
-        });
+        tokio::spawn(PumpFun::listen(self.client.clone(), tx));
 
         Ok(rx)
     }

@@ -93,7 +93,7 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        println!("BUY {mint} {amount} SOL");
+        log::info!("BUY {mint} {amount} SOL");
         Ok(())
         // self.trade(
         //     "buy",
@@ -113,7 +113,7 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        println!("SELL {mint} {amount} SOL");
+        log::info!("SELL {mint} {amount} SOL");
         Ok(())
         // self.trade(
         //     "sell",
@@ -133,7 +133,7 @@ impl Executor for PumpDev {
         priority: Decimal,
         slippage: u16,
     ) -> anyhow::Result<()> {
-        println!("SELL {mint} {amount}%");
+        log::info!("SELL {mint} {amount}%");
         Ok(())
         // self.trade(
         //     "sell",

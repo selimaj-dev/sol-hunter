@@ -127,8 +127,8 @@ impl Bot {
                         ws = self.ws.lock().await;
                     }
 
-                    Ok(event) => {
-                        println!("{:?}", event);
+                    Ok(_event) => {
+                        // println!("{:?}", event);
                     }
 
                     Err(err) => {

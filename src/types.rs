@@ -6,6 +6,7 @@ pub enum PumpDevEvent {
     Connected { client_id: u64, message: String },
     ConnectionStatus { connected: bool, timestamp: u64 },
     Subscribed { method: String },
+    Unsubscribed { method: String, keys: Vec<String> },
     Create(NewToken),
     Trade(Trade),
 }
@@ -40,6 +41,8 @@ impl<'de> Deserialize<'de> for PumpDevEvent {
             ConnectionStatus { connected: bool, timestamp: u64 },
             #[serde(rename = "subscribed")]
             Subscribed { method: String },
+            #[serde(rename = "unsubscribed")]
+            Unsubscribed { method: String, keys: Vec<String> },
         }
 
         match serde_json::from_value(value).map_err(serde::de::Error::custom)? {
@@ -54,6 +57,9 @@ impl<'de> Deserialize<'de> for PumpDevEvent {
                 timestamp,
             }),
             Tagged::Subscribed { method } => Ok(PumpDevEvent::Subscribed { method }),
+            Tagged::Unsubscribed { method, keys } => {
+                Ok(PumpDevEvent::Unsubscribed { method, keys })
+            }
         }
     }
 }

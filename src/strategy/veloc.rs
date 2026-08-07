@@ -14,9 +14,25 @@ const BUY_AMOUNT_SOL: Decimal = dec!(0.2);
 const PRIORITY: Decimal = dec!(0.0002);
 const SLIPPAGE: u16 = 10;
 const MAX_SUBSCRIBED_TOKENS: usize = 25;
+const MAX_OPEN_POSITIONS: usize = 5;
+
+// Strict entry filters
+const MIN_UNIQUE_BUYERS: usize = 0;
+const MIN_NET_SOL_FLOW: f64 = 0.0003;
+const MIN_TRADE_COUNT: usize = 0;
+const MAX_CURVE_SOL: f64 = 800.0;
+const MIN_MOMENTUM_PCT: f64 = 0.001;
+
+// Exit rules
+const TAKE_PROFIT_PCT: f64 = 0.40;
+const STOP_LOSS_PCT: f64 = -0.10;
+const TRAILING_STOP_DROP_PCT: f64 = 0.12;
+const TRAILING_STOP_MIN_GAIN_PCT: f64 = 0.10;
+const STALL_DURATION: Duration = Duration::from_secs(2);
 
 struct TokenTracker {
     created_at: Instant,
+    first_price_sol: Option<f64>,
     unique_buyers: HashSet<String>,
     net_sol_flow: f64,
     trade_count: usize,
@@ -26,12 +42,11 @@ struct OpenPosition {
     trade: TradeLog,
 
     highest_price_sol: f64,
+    last_price_sol: f64,
     last_high_time: Instant,
 }
 
 pub struct MomentumVelocityStrategy {
-    min_unique_buyers: usize,
-    min_net_sol_flow: f64,
     max_tracking_duration: Duration,
 
     trackers: HashMap<String, TokenTracker>,
@@ -41,16 +56,20 @@ pub struct MomentumVelocityStrategy {
     active_subscriptions: VecDeque<String>,
 }
 
-impl MomentumVelocityStrategy {
-    pub fn new() -> Self {
+impl Default for MomentumVelocityStrategy {
+    fn default() -> Self {
         Self {
-            min_unique_buyers: 1,
-            min_net_sol_flow: 0.001,
             max_tracking_duration: Duration::from_secs(45),
             trackers: HashMap::new(),
             positions: HashMap::new(),
             active_subscriptions: VecDeque::with_capacity(MAX_SUBSCRIBED_TOKENS),
         }
+    }
+}
+
+impl MomentumVelocityStrategy {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     fn calculate_price_sol(&self, trade: &Trade) -> f64 {
@@ -69,6 +88,39 @@ impl MomentumVelocityStrategy {
         // }
         self.trackers.remove(mint);
         self.active_subscriptions.retain(|m| m != mint);
+        Ok(())
+    }
+
+    async fn execute_exit(
+        &mut self,
+        bot: &Arc<Bot>,
+        mint: &str,
+        reason: ExitReason,
+    ) -> anyhow::Result<()> {
+        let Some((entry_price, exit_price)) = self
+            .positions
+            .get(mint)
+            .map(|pos| (pos.trade.entry_price_sol, pos.last_price_sol))
+        else {
+            return Ok(());
+        };
+
+        let pnl = ((exit_price - entry_price) / entry_price) * 100.0;
+
+        info!(
+            "[{}] EXECUTING SELL {}% {:?}",
+            mint, pnl, reason,
+        );
+
+        bot.executor.sell(mint, 100, PRIORITY, SLIPPAGE).await?;
+
+        if let Some(mut pos) = self.positions.remove(mint) {
+            pos.trade.close(exit_price, reason);
+
+            bot.trade_log.lock().await.push(pos.trade);
+        }
+
+        self.cleanup_and_unsubscribe(bot, mint).await?;
         Ok(())
     }
 }
@@ -123,6 +175,7 @@ impl Strategy for MomentumVelocityStrategy {
             token.mint,
             TokenTracker {
                 created_at: Instant::now(),
+                first_price_sol: None,
                 unique_buyers: HashSet::new(),
                 net_sol_flow: 0.0,
                 trade_count: 0,
@@ -137,11 +190,13 @@ impl Strategy for MomentumVelocityStrategy {
         let current_price = self.calculate_price_sol(&trade);
 
         // -------------------------------------------------------------
-        // 1. Manage Active Positions (Take Profit / Stop Loss / Stall)
+        // 1. Price-based exits for the mint of this trade.
+        //    Updates the highest price / stall timer before any stall scan.
         // -------------------------------------------------------------
+        let mut exits: Vec<(String, ExitReason)> = Vec::new();
+
         if let Some(pos) = self.positions.get_mut(mint) {
-            let price_change_pct =
-                (current_price - pos.trade.entry_price_sol) / pos.trade.entry_price_sol;
+            pos.last_price_sol = current_price;
 
             if current_price > pos.highest_price_sol {
                 pos.highest_price_sol = current_price;
@@ -149,44 +204,47 @@ impl Strategy for MomentumVelocityStrategy {
                 trace!("[{}] New high reached: {:.9} SOL", mint, current_price);
             }
 
+            let price_change_pct =
+                (current_price - pos.trade.entry_price_sol) / pos.trade.entry_price_sol;
             let drop_from_peak = (pos.highest_price_sol - current_price) / pos.highest_price_sol;
 
-            let should_sell = match () {
-                _ if price_change_pct >= 0.40 => Some(ExitReason::TakeProfit),
-                _ if price_change_pct <= -0.1 => Some(ExitReason::StopLoss),
-                _ if drop_from_peak >= 0.12 && price_change_pct > 0.10 => {
+            let reason = match () {
+                _ if price_change_pct >= TAKE_PROFIT_PCT => Some(ExitReason::TakeProfit),
+                _ if price_change_pct <= STOP_LOSS_PCT => Some(ExitReason::StopLoss),
+                _ if drop_from_peak >= TRAILING_STOP_DROP_PCT
+                    && price_change_pct > TRAILING_STOP_MIN_GAIN_PCT =>
+                {
                     Some(ExitReason::TrailingStop)
-                }
-                _ if pos.last_high_time.elapsed() >= Duration::from_secs(2) => {
-                    Some(ExitReason::MomentumStalled)
                 }
                 _ => None,
             };
 
-            if let Some(reason) = should_sell {
-                info!(
-                    "[{}] EXECUTING SELL. Reason: {:?} {:.1}%",
-                    mint,
-                    reason,
-                    price_change_pct * 100.0
-                );
-
-                bot.executor.sell(mint, 100, PRIORITY, SLIPPAGE).await?;
-
-                if let Some(mut pos) = self.positions.remove(mint) {
-                    pos.trade.close(current_price, reason);
-
-                    bot.trade_log.lock().await.push(pos.trade);
-                }
-
-                self.cleanup_and_unsubscribe(&bot, mint).await?;
+            if let Some(reason) = reason {
+                exits.push((mint.clone(), reason));
             }
-
-            return Ok(());
         }
 
         // -------------------------------------------------------------
-        // 2. Evaluate Potential Buys
+        // 2. Stall exits for ALL open positions. Stalled positions stop
+        //    producing trades, so this must NOT be gated on the incoming
+        //    trade's mint — any trade evaluates every position.
+        // -------------------------------------------------------------
+        for (position_mint, pos) in self.positions.iter() {
+            if pos.last_high_time.elapsed() >= STALL_DURATION {
+                exits.push((position_mint.clone(), ExitReason::MomentumStalled));
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 3. Execute any pending exits. Duplicates are no-ops since the
+        //    position is removed on the first exit.
+        // -------------------------------------------------------------
+        for (exit_mint, reason) in exits {
+            self.execute_exit(&bot, &exit_mint, reason).await?;
+        }
+
+        // -------------------------------------------------------------
+        // 4. Evaluate Potential Buys
         // -------------------------------------------------------------
         if let Some(tracker) = self.trackers.get_mut(mint) {
             let elapsed = tracker.created_at.elapsed();
@@ -200,6 +258,11 @@ impl Strategy for MomentumVelocityStrategy {
             }
 
             tracker.trade_count += 1;
+
+            if tracker.first_price_sol.is_none() {
+                tracker.first_price_sol = Some(current_price);
+            }
+
             match trade.tx_type {
                 TradeType::Buy => {
                     tracker.unique_buyers.insert(trade.trader.clone());
@@ -210,34 +273,64 @@ impl Strategy for MomentumVelocityStrategy {
                 }
             }
 
-            let has_enough_buyers = tracker.unique_buyers.len() >= self.min_unique_buyers;
-            let has_volume_surge = tracker.net_sol_flow >= self.min_net_sol_flow;
             let v_sol = trade.v_sol_in_bonding_curve / 1_000_000_000.0;
-            let is_early_curve = v_sol < 60.0;
+            let price_change_pct = match tracker.first_price_sol {
+                Some(first_price) if first_price > 0.0 => {
+                    (current_price - first_price) / first_price
+                }
+                _ => 0.0,
+            };
+
+            let has_enough_buyers = tracker.unique_buyers.len() >= MIN_UNIQUE_BUYERS;
+            let has_volume_surge = tracker.net_sol_flow >= MIN_NET_SOL_FLOW;
+            let has_min_trades = tracker.trade_count >= MIN_TRADE_COUNT;
+            let is_early_curve = v_sol < MAX_CURVE_SOL;
+            let is_buy_trade = matches!(trade.tx_type, TradeType::Buy);
+            let has_momentum = price_change_pct >= MIN_MOMENTUM_PCT;
+            let has_capacity = self.positions.len() < MAX_OPEN_POSITIONS;
 
             // Log detailed status of buy criteria evaluation on every trade
             debug!(
-                "[{}] Trade #{} ({:?}) | Buyers: {}/{} [{}] | Net Flow: {:.3}/{:.3} SOL [{}] | Curve SOL: {:.2} < 60 [{}]",
+                "[{}] Trade #{} ({:?}) | Buyers: {}/{} [{}] | Net Flow: {:.3}/{:.3} SOL [{}] | Trades: {}/{} [{}] | Curve SOL: {:.2} < {:.0} [{}] | Price Δ: {:.2}% >= {:.0}% [{}] | Capacity: {}/{} [{}]",
                 mint,
                 tracker.trade_count,
                 trade.tx_type,
                 tracker.unique_buyers.len(),
-                self.min_unique_buyers,
+                MIN_UNIQUE_BUYERS,
                 if has_enough_buyers { "PASS" } else { "FAIL" },
                 tracker.net_sol_flow,
-                self.min_net_sol_flow,
+                MIN_NET_SOL_FLOW,
                 if has_volume_surge { "PASS" } else { "FAIL" },
-                trade.v_sol_in_bonding_curve,
-                if is_early_curve { "PASS" } else { "FAIL" }
+                tracker.trade_count,
+                MIN_TRADE_COUNT,
+                if has_min_trades { "PASS" } else { "FAIL" },
+                v_sol,
+                MAX_CURVE_SOL,
+                if is_early_curve { "PASS" } else { "FAIL" },
+                price_change_pct * 100.0,
+                MIN_MOMENTUM_PCT * 100.0,
+                if has_momentum { "PASS" } else { "FAIL" },
+                self.positions.len(),
+                MAX_OPEN_POSITIONS,
+                if has_capacity { "PASS" } else { "FAIL" }
             );
 
-            if has_enough_buyers && has_volume_surge && is_early_curve {
+            if has_capacity
+                && has_enough_buyers
+                && has_volume_surge
+                && has_min_trades
+                && is_buy_trade
+                && has_momentum
+                && is_early_curve
+            {
                 info!(
-                    "🚀 BUY SIGNAL TRIGGERED for {}! Unique Buyers: {}, Net Flow: {:.3} SOL, Curve SOL: {:.2}",
+                    "🚀 BUY SIGNAL TRIGGERED for {}! Unique Buyers: {}, Net Flow: {:.3} SOL, Trades: {}, Curve SOL: {:.2}, Price Δ: {:.2}%",
                     mint,
                     tracker.unique_buyers.len(),
                     tracker.net_sol_flow,
-                    trade.v_sol_in_bonding_curve
+                    tracker.trade_count,
+                    trade.v_sol_in_bonding_curve,
+                    price_change_pct * 100.0
                 );
 
                 bot.executor
@@ -255,6 +348,7 @@ impl Strategy for MomentumVelocityStrategy {
                             trade.v_sol_in_bonding_curve,
                         ),
                         highest_price_sol: current_price,
+                        last_price_sol: current_price,
                         last_high_time: Instant::now(),
                     },
                 );

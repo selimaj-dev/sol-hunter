@@ -15,12 +15,11 @@ use tokio::{
 
 use crate::bot::Bot;
 
-async fn shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow::Result<()> {
+async fn try_shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow::Result<()> {
+    let mut stdin = BufReader::new(io::stdin());
+    let mut line = String::new();
+
     loop {
-        let mut stdin = BufReader::new(io::stdin());
-
-        let mut line = String::new();
-
         stdin.read_line(&mut line).await?;
 
         match line.to_lowercase().trim() {
@@ -53,6 +52,12 @@ async fn shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow::Re
 
             _ => {}
         }
+    }
+}
+
+async fn shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) {
+    if let Err(e) = try_shutdown_listener(bot, tx).await {
+        log::error!("{e}");
     }
 }
 

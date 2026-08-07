@@ -14,16 +14,14 @@ pub struct TradeLog {
 
     pub opened_at: chrono::DateTime<chrono::Utc>,
     pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub duration: Option<chrono::TimeDelta>,
 
     pub entry_price_sol: f64,
     pub exit_price_sol: Option<f64>,
 
     pub pnl_percent: Option<f64>,
-    pub duration: Option<chrono::TimeDelta>,
-
     pub exit_reason: Option<ExitReason>,
 
-    // Conditions when entered
     pub unique_buyers: usize,
     pub net_sol_flow: f64,
     pub curve_sol: f64,

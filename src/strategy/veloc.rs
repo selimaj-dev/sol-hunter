@@ -5,10 +5,10 @@ use std::time::{Duration, Instant};
 use log::{debug, info, trace, warn};
 use rust_decimal::{Decimal, dec};
 
+use super::{NewToken, Trade};
 use crate::bot::Bot;
 use crate::data::tradelog::{ExitReason, TradeLog};
-use crate::strategy::Strategy;
-use crate::types::{NewToken, Trade, TradeType};
+use crate::strategy::{Strategy, TradeType};
 
 const BUY_AMOUNT_SOL: Decimal = dec!(0.2);
 const PRIORITY: Decimal = dec!(0.0002);

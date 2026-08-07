@@ -179,8 +179,6 @@ impl Strategy for MomentumVelocityStrategy {
                 if let Some(mut pos) = self.positions.remove(mint) {
                     pos.trade.close(current_price, reason);
 
-                    info!("TRADE RESULT: {:?}", pos.trade);
-
                     bot.trade_log.lock().await.push(pos.trade);
                 }
 

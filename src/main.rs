@@ -16,10 +16,13 @@ use tokio::{
 use crate::bot::Bot;
 
 async fn shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow::Result<()> {
-    let stdin = BufReader::new(io::stdin());
-    let mut lines = stdin.lines();
+    loop {
+        let mut stdin = BufReader::new(io::stdin());
 
-    while let Ok(Some(line)) = lines.next_line().await {
+        let mut line = String::new();
+
+        stdin.read_line(&mut line).await?;
+
         match line.to_lowercase().trim() {
             "exit" | "shutdown" => {
                 let _ = tx.send(true);
@@ -33,9 +36,13 @@ async fn shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow::Re
 
                 let filename = format!("sol-hun-{}.csv", formatted_time);
 
+                let trade_log = bot.trade_log.lock().await;
+
+                log::info!("Saving {} trades", trade_log.len());
+
                 let mut writer = csv::Writer::from_path(&filename)?;
 
-                for trade in bot.trade_log.lock().await.iter() {
+                for trade in trade_log.iter() {
                     writer.serialize(trade)?;
                 }
 
@@ -47,8 +54,6 @@ async fn shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow::Re
             _ => {}
         }
     }
-
-    Ok(())
 }
 
 #[tokio::main]

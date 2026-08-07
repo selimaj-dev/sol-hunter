@@ -74,6 +74,10 @@ impl MomentumVelocityStrategy {
 
 #[async_trait::async_trait]
 impl Strategy for MomentumVelocityStrategy {
+    async fn execute_sell_all(&mut self, bot: Arc<Bot>) -> anyhow::Result<()> {
+        bot.executor.lock().await.sell_all(PRIORITY, SLIPPAGE).await
+    }
+
     async fn on_new_coin(&mut self, bot: Arc<Bot>, token: NewToken) -> anyhow::Result<()> {
         trace!("[NEW COIN] Event received for token: {}", token.mint);
 
@@ -176,6 +180,8 @@ impl Strategy for MomentumVelocityStrategy {
                     pos.trade.close(current_price, reason);
 
                     info!("TRADE RESULT: {:?}", pos.trade);
+
+                    bot.trade_log.lock().await.push(pos.trade);
                 }
 
                 self.cleanup_and_unsubscribe(&bot, mint).await?;

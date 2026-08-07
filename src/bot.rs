@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
@@ -9,7 +9,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use crate::{
     account::AccountManager,
     executor::Executor,
-    strategy::{Strategy, burst::Burst},
+    strategy::{Strategy, veloc::MomentumVelocityStrategy},
 };
 
 pub struct Bot {
@@ -69,9 +69,7 @@ impl Bot {
             ws: Mutex::new(connect_async("wss://pumpdev.io/ws").await?.0),
             executor: Mutex::new(Box::new(account.executor())),
             accounts: Mutex::new(accounts),
-            strategy: Mutex::new(Box::new(Burst {
-                tokens: HashMap::new(),
-            })),
+            strategy: Mutex::new(Box::new(MomentumVelocityStrategy::new())),
         }))
     }
 

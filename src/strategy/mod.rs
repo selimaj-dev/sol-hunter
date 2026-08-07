@@ -1,4 +1,4 @@
-pub mod burst;
+pub mod veloc;
 
 use std::sync::Arc;
 

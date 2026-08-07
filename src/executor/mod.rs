@@ -9,7 +9,7 @@ use crate::account::Account;
 pub trait Executor: Send + Sync {
     async fn buy(
         &self,
-        mint: String,
+        mint: &str,
         amount: Decimal,
         priority: Decimal,
         slippage: u16,
@@ -19,7 +19,7 @@ pub trait Executor: Send + Sync {
 
     async fn sell(
         &self,
-        mint: String,
+        mint: &str,
         amount: Decimal,
         priority: Decimal,
         slippage: u16,
@@ -29,7 +29,7 @@ pub trait Executor: Send + Sync {
 
     async fn sell_percent(
         &self,
-        mint: String,
+        mint: &str,
         amount: u8,
         priority: Decimal,
         slippage: u16,

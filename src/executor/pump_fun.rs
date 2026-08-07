@@ -39,7 +39,7 @@ impl PumpDev {
     async fn trade(
         &self,
         action: &str,
-        mint: String,
+        mint: &str,
         amount: String,
         priority: Decimal,
         slippage: u16,
@@ -88,7 +88,7 @@ impl PumpDev {
 impl Executor for PumpDev {
     async fn buy(
         &self,
-        mint: String,
+        mint: &str,
         amount: Decimal,
         priority: Decimal,
         slippage: u16,
@@ -106,7 +106,7 @@ impl Executor for PumpDev {
 
     async fn sell(
         &self,
-        mint: String,
+        mint: &str,
         amount: Decimal,
         priority: Decimal,
         slippage: u16,
@@ -124,7 +124,7 @@ impl Executor for PumpDev {
 
     async fn sell_percent(
         &self,
-        mint: String,
+        mint: &str,
         amount: u8,
         priority: Decimal,
         slippage: u16,

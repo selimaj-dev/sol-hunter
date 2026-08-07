@@ -11,11 +11,14 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::data::Event;
 use crate::data::NewToken;
+use crate::data::Trade;
+use crate::data::TradeType;
 use crate::launchpad::Client;
 use crate::launchpad::Launchpad;
 
 const PUMP_FUN_PROGRAM: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const CREATE_EVENT_DISCRIMINATOR: [u8; 8] = [27, 114, 169, 77, 222, 235, 99, 118];
+const TRADE_EVENT_DISCRIMINATOR: [u8; 8] = [189, 219, 127, 211, 78, 230, 97, 238];
 
 pub struct PumpFun {
     pub positions: HashMap<String, Decimal>,
@@ -101,25 +104,24 @@ impl Launchpad for PumpFun {
                 continue;
             }
 
-            let Some(event) = logs.iter().find_map(|log| {
-                log.strip_prefix("Program data: ")
-                    .and_then(|encoded| STANDARD.decode(encoded).ok())
-                    .and_then(|data| parse_create_event(&data))
-            }) else {
-                continue;
-            };
+            for log in &logs {
+                let Some(encoded) = log.strip_prefix("Program data: ") else {
+                    continue;
+                };
 
-            let token = NewToken {
-                mint: event.mint,
-                trader_public_key: event.user,
-                name: event.name,
-                symbol: event.symbol,
-                uri: event.uri,
-                market_cap_sol: event.market_cap_sol,
-            };
+                let Ok(data) = STANDARD.decode(encoded) else {
+                    continue;
+                };
 
-            if tx.send(Event::NewToken(token)).await.is_err() {
-                break;
+                if let Some(token) = parse_create_event(&data) {
+                    tx.send(Event::NewToken(token)).await?;
+                }
+
+                if let Some(trade) =
+                    parse_trade_event(&data, notification.params.result.value.signature.clone())
+                {
+                    tx.send(Event::Trade(trade)).await?;
+                }
             }
         }
 
@@ -131,16 +133,61 @@ impl Launchpad for PumpFun {
     }
 }
 
-struct CreateEvent {
-    name: String,
-    symbol: String,
-    uri: String,
-    mint: String,
-    user: String,
-    market_cap_sol: f64,
+fn parse_trade_event(data: &[u8], signature: String) -> Option<Trade> {
+    if data.len() < 8 || data[..8] != TRADE_EVENT_DISCRIMINATOR {
+        return None;
+    }
+
+    let mut offset = 8;
+
+    let mint = decode_pubkey(data, &mut offset)?;
+
+    let sol_amount = decode_u64(data, &mut offset)? as f64;
+    let token_amount = decode_u64(data, &mut offset)? as f64;
+
+    let is_buy = decode_bool(data, &mut offset)?;
+
+    let trader = decode_pubkey(data, &mut offset)?;
+
+    // timestamp exists but we don't need it currently
+    let _timestamp = decode_i64(data, &mut offset)?;
+
+    let v_sol_in_bonding_curve = decode_u64(data, &mut offset)? as f64;
+
+    let v_tokens_in_bonding_curve = decode_u64(data, &mut offset)? as f64;
+
+    // These exist in the event but aren't needed for your struct
+    let _real_sol_reserves = decode_u64(data, &mut offset)?;
+
+    let _real_token_reserves = decode_u64(data, &mut offset)?;
+
+    Some(Trade {
+        signature,
+        mint,
+        trader,
+        tx_type: if is_buy {
+            TradeType::Buy
+        } else {
+            TradeType::Sell
+        },
+        sol_amount,
+        token_amount,
+
+        // Pump.fun bonding curve market cap:
+        // token_price = virtual SOL / virtual tokens
+        // market cap is derived
+        market_cap_sol: if v_tokens_in_bonding_curve > 0.0 {
+            v_sol_in_bonding_curve / v_tokens_in_bonding_curve
+        } else {
+            0.0
+        },
+
+        v_tokens_in_bonding_curve,
+        v_sol_in_bonding_curve,
+    })
 }
 
-fn parse_create_event(data: &[u8]) -> Option<CreateEvent> {
+fn parse_create_event(data: &[u8]) -> Option<NewToken> {
     if data.len() < 8 || data[..8] != CREATE_EVENT_DISCRIMINATOR {
         return None;
     }
@@ -152,18 +199,18 @@ fn parse_create_event(data: &[u8]) -> Option<CreateEvent> {
     let uri = decode_string(data, &mut offset)?;
     let mint = decode_pubkey(data, &mut offset)?;
     let _bonding_curve = decode_pubkey(data, &mut offset)?;
-    let user = decode_pubkey(data, &mut offset)?;
+    let trader_public_key = decode_pubkey(data, &mut offset)?;
     let _creator = decode_pubkey(data, &mut offset)?;
 
     // Virtual reserves were added in a later program version; fall back to 0.0 for legacy events.
     let market_cap_sol = decode_market_cap(data, &mut offset).unwrap_or(0.0);
 
-    Some(CreateEvent {
+    Some(NewToken {
         name,
         symbol,
         uri,
         mint,
-        user,
+        trader_public_key,
         market_cap_sol,
     })
 }
@@ -216,23 +263,35 @@ fn decode_i64(data: &[u8], offset: &mut usize) -> Option<i64> {
     Some(i64::from_le_bytes(bytes))
 }
 
-#[derive(Deserialize)]
+fn decode_bool(data: &[u8], offset: &mut usize) -> Option<bool> {
+    if *offset >= data.len() {
+        return None;
+    }
+
+    let value = data[*offset] != 0;
+    *offset += 1;
+
+    Some(value)
+}
+
+#[derive(Debug, Deserialize)]
 struct LogsNotification {
     method: String,
     params: NotificationParams,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct NotificationParams {
     result: NotificationResult,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct NotificationResult {
     value: LogsValue,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct LogsValue {
+    signature: String,
     logs: Vec<String>,
 }

@@ -1,7 +1,7 @@
 pub mod bot;
 pub mod data;
-pub mod strategy;
 pub mod launchpad;
+pub mod strategy;
 
 use std::sync::Arc;
 
@@ -27,8 +27,6 @@ async fn try_shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow
             }
 
             "save" => {
-                log::info!("Saving trades");
-
                 let now = Local::now();
                 let formatted_time = now.format("%m-%d-%H-%M").to_string();
 
@@ -51,6 +49,8 @@ async fn try_shutdown_listener(bot: Arc<Bot>, tx: watch::Sender<bool>) -> anyhow
 
             _ => {}
         }
+
+        line.clear();
     }
 }
 

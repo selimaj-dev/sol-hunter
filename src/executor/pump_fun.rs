@@ -1,10 +1,8 @@
 use rust_decimal::Decimal;
 
-use crate::{account::Account, executor::Executor};
+use crate::executor::Executor;
 
-pub struct PumpDev {
-    pub account: Account,
-}
+pub struct PumpDev {}
 
 #[async_trait::async_trait]
 impl Executor for PumpDev {

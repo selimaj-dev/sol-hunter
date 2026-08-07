@@ -37,6 +37,8 @@ impl AccountManager {
             tokio::fs::create_dir_all(path.parent().unwrap()).await?;
             tokio::fs::write(&path, default.to_string()?).await?;
 
+            println!("Please open {path:?} and edit the data accordingly");
+
             return Ok(default);
         }
 

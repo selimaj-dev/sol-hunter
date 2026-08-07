@@ -42,8 +42,8 @@ pub struct MomentumVelocityStrategy {
 impl MomentumVelocityStrategy {
     pub fn new() -> Self {
         Self {
-            min_unique_buyers: 2,
-            min_net_sol_flow: ,
+            min_unique_buyers: 1,
+            min_net_sol_flow: 0.001,
             max_tracking_duration: Duration::from_secs(45),
             trackers: HashMap::new(),
             positions: HashMap::new(),
@@ -148,7 +148,7 @@ impl Strategy for MomentumVelocityStrategy {
                     true,
                     format!("Take Profit (+{:.1}%)", price_change_pct * 100.0),
                 ),
-                _ if price_change_pct <= -0.15 => (
+                _ if price_change_pct <= -0.1 => (
                     true,
                     format!("Hard Stop Loss ({:.1}%)", price_change_pct * 100.0),
                 ),
@@ -208,7 +208,8 @@ impl Strategy for MomentumVelocityStrategy {
 
             let has_enough_buyers = tracker.unique_buyers.len() >= self.min_unique_buyers;
             let has_volume_surge = tracker.net_sol_flow >= self.min_net_sol_flow;
-            let is_early_curve = trade.v_sol_in_bonding_curve < 60.0;
+            let v_sol = trade.v_sol_in_bonding_curve / 1_000_000_000.0;
+            let is_early_curve = v_sol < 60.0;
 
             // Log detailed status of buy criteria evaluation on every trade
             debug!(

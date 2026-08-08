@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::executor::pump_fun::PumpDevAccount;
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 pub fn get_accounts_path() -> anyhow::Result<PathBuf> {
@@ -13,45 +12,19 @@ pub fn get_accounts_path() -> anyhow::Result<PathBuf> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum Account {
-    PumpDev(PumpDevAccount),
+pub struct Account {
+    #[serde(rename = "publicKey")]
+    pub public_key: String,
+    #[serde(rename = "privateKey")]
+    pub private_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountManager {
+    #[serde(rename = "apiKey")]
+    pub api_key: String,
     pub active: String,
     pub accounts: HashMap<String, Account>,
-}
-
-impl Account {
-    pub async fn new() -> anyhow::Result<Self> {
-        let response = reqwest::Client::new()
-            .post("https://pumpdev.io/api/wallet/create")
-            .json(&serde_json::json!({}))
-            .send()
-            .await
-            .context("Failed to create PumpDev wallet")?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body: serde_json::Value = response.json().await.unwrap_or_default();
-            let message = body
-                .get("error")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("Unknown error");
-            return Err(anyhow!(
-                "Failed to create PumpDev wallet ({status}): {message}"
-            ));
-        }
-
-        let account: PumpDevAccount = response
-            .json()
-            .await
-            .context("Failed to parse PumpDev wallet")?;
-
-        Ok(Self::PumpDev(account))
-    }
 }
 
 impl AccountManager {
@@ -64,6 +37,8 @@ impl AccountManager {
             tokio::fs::create_dir_all(path.parent().unwrap()).await?;
             tokio::fs::write(&path, default.to_string()?).await?;
 
+            println!("Please open {path:?} and edit the data accordingly");
+
             return Ok(default);
         }
 
@@ -74,10 +49,17 @@ impl AccountManager {
 
     pub async fn new() -> anyhow::Result<Self> {
         let mut accounts = HashMap::new();
-        accounts.insert("default".to_string(), Account::new().await?);
+        accounts.insert(
+            "default".to_string(),
+            Account {
+                public_key: String::new(),
+                private_key: String::new(),
+            },
+        );
 
         Ok(Self {
             active: "default".to_string(),
+            api_key: String::new(),
             accounts,
         })
     }

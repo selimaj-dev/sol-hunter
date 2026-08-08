@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     bot::Bot,
-    types::{NewToken, Trade},
+    data::{NewToken, Trade},
 };
 
 #[async_trait::async_trait]

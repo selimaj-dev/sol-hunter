@@ -1,0 +1,46 @@
+pub mod account;
+pub mod tradelog;
+
+use serde::Deserialize;
+
+#[derive(Debug, Clone)]
+pub enum Event {
+    NewToken(NewToken),
+    Trade(Trade),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewToken {
+    pub mint: String,
+    #[serde(rename = "traderPublicKey")]
+    pub trader_public_key: String,
+
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+    #[serde(rename = "marketCapSol")]
+    pub market_cap_sol: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum TradeType {
+    #[serde(rename = "buy")]
+    Buy,
+    #[serde(rename = "sell")]
+    Sell,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Trade {
+    pub signature: String,
+    pub mint: String,
+    pub trader: String,
+
+    pub tx_type: TradeType,
+    pub sol_amount: f64,
+    pub token_amount: f64,
+
+    pub market_cap_sol: f64,
+    pub v_tokens_in_bonding_curve: f64,
+    pub v_sol_in_bonding_curve: f64,
+}
